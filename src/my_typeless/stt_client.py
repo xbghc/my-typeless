@@ -21,7 +21,8 @@ class STTClient:
 
         Args:
             audio_data: WAV 格式的音频字节数据
-            prompt: 可选的提示词，帮助 Whisper 正确识别专有名词
+            prompt: 可选的提示词，用于帮助 Whisper 正确识别专有名词
+                    以及在增量转录时引导上下文连贯性
 
         Returns:
             转录的原始文本
