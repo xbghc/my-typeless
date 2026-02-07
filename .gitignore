@@ -8,3 +8,15 @@ wheels/
 
 # Virtual environments
 .venv
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Playwright MCP screenshots
+.playwright-mcp/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
