@@ -8,7 +8,9 @@ from typing import List
 
 HISTORY_DIR = Path.home() / ".my-typeless"
 HISTORY_FILE = HISTORY_DIR / "history.json"
+CORRECTIONS_FILE = HISTORY_DIR / "corrections.json"
 MAX_HISTORY = 200  # 最多保留条数
+MAX_CORRECTIONS = 5  # few-shot 示例数量
 
 
 @dataclass
@@ -54,3 +56,32 @@ def add_history(raw_input: str, refined_output: str) -> None:
 def clear_history() -> None:
     """清空所有历史记录"""
     save_history([])
+
+
+# ---- 修正记录（用于 LLM few-shot 优化） ----
+
+@dataclass
+class CorrectionEntry:
+    raw_input: str        # STT 原始文本（LLM 的输入）
+    corrected_output: str  # 用户修正后的文本（期望的 LLM 输出）
+
+
+def load_corrections() -> List[CorrectionEntry]:
+    """加载修正记录"""
+    if not CORRECTIONS_FILE.exists():
+        return []
+    try:
+        data = json.loads(CORRECTIONS_FILE.read_text(encoding="utf-8"))
+        return [CorrectionEntry(**e) for e in data]
+    except (json.JSONDecodeError, TypeError, KeyError):
+        return []
+
+
+def add_correction(raw_input: str, corrected_output: str) -> None:
+    """新增一条修正记录（最新在前，仅保留最近几条）"""
+    entries = load_corrections()
+    entries.insert(0, CorrectionEntry(raw_input, corrected_output))
+    entries = entries[:MAX_CORRECTIONS]
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    data = [asdict(e) for e in entries]
+    CORRECTIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")

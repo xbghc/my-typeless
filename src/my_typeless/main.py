@@ -10,6 +10,7 @@ from .config import AppConfig
 from .hotkey import HotkeyListener
 from .worker import Worker
 from .tray import TrayIcon, SettingsWindow, QuickPopup
+from .history import add_correction
 
 
 class MyTypelessApp:
@@ -34,6 +35,8 @@ class MyTypelessApp:
         self._tray = TrayIcon()
         self._settings_window: SettingsWindow | None = None
         self._quick_popup: QuickPopup | None = None
+        self._last_raw: str = ""
+        self._last_refined: str = ""
 
         self._connect_signals()
 
@@ -44,6 +47,9 @@ class MyTypelessApp:
         self._hotkey.key_released.connect(self._worker.stop_recording_and_process)
         self._hotkey.double_clicked.connect(self._show_quick_popup)
 
+        # Worker 结果 → 存储 + 同步弹窗
+        self._worker.result_ready.connect(self._on_result)
+
         # Worker 状态 → 托盘图标
         self._worker.state_changed.connect(self._tray.set_state)
         self._worker.error_occurred.connect(self._on_error)
@@ -52,11 +58,24 @@ class MyTypelessApp:
         self._tray.show_settings.connect(self._open_settings)
         self._tray.quit_app.connect(self._quit)
 
+    def _on_result(self, raw_text: str, refined_text: str) -> None:
+        """Worker 完成处理后：存储最新结果 + 同步到弹窗"""
+        self._last_raw = raw_text
+        self._last_refined = refined_text
+        # 如果弹窗正在显示，实时同步新内容
+        if self._quick_popup is not None and self._quick_popup.isVisible():
+            self._quick_popup.update_text(raw_text, refined_text)
+
     def _show_quick_popup(self) -> None:
         """双击热键时弹出快捷窗口"""
         if self._quick_popup is None:
             self._quick_popup = QuickPopup()
-        self._quick_popup.refresh_and_show()
+            self._quick_popup.correction_submitted.connect(self._on_correction)
+        self._quick_popup.refresh_and_show(self._last_raw, self._last_refined)
+
+    def _on_correction(self, raw_input: str, corrected_output: str) -> None:
+        """用户提交修正 → 保存为 few-shot 示例"""
+        add_correction(raw_input, corrected_output)
 
     def _open_settings(self) -> None:
         """打开设置窗口"""

@@ -982,15 +982,20 @@ class TrayIcon(QSystemTrayIcon):
 
 
 class QuickPopup(QMainWindow):
-    """双击热键弹出的快捷窗口 - 显示最近的历史记录"""
+    """双击热键弹出的快捷窗口 - 编辑上次输出，提交修正以优化未来结果"""
+
+    # (raw_input, corrected_output) — 用户确认修正时发射
+    correction_submitted = pyqtSignal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._current_raw_input: str = ""
+        self._current_refined_output: str = ""
         self._init_ui()
 
     def _init_ui(self) -> None:
-        self.setWindowTitle("My Typeless - Quick View")
-        self.setFixedSize(420, 340)
+        self.setWindowTitle("My Typeless - Quick Edit")
+        self.setFixedSize(440, 280)
         self.setWindowFlags(
             Qt.WindowType.Window
             | Qt.WindowType.WindowStaysOnTopHint
@@ -1011,112 +1016,84 @@ class QuickPopup(QMainWindow):
         layout.setContentsMargins(20, 20, 20, 16)
         layout.setSpacing(12)
 
-        # 标题
-        title = QLabel("Recent History")
+        # 标题 + 说明
+        title = QLabel("Edit Last Output")
         title.setFont(QFont("Inter", 14, QFont.Weight.DemiBold))
         title.setStyleSheet("color: #1a1a1a;")
         layout.addWidget(title)
 
-        # 可滚动历史列表
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("""
-            QScrollArea { border: none; background: #ffffff; }
-            QScrollBar:vertical {
-                width: 5px; background: transparent;
+        desc = QLabel("Correct the text below to improve future results.")
+        desc.setStyleSheet("color: #5d5d5d; font-size: 12px;")
+        layout.addWidget(desc)
+
+        # 可编辑文本框
+        self._edit = QTextEdit()
+        self._edit.setPlaceholderText("No output yet. Hold the hotkey to dictate!")
+        self._edit.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #d1d5db; border-radius: 8px;
+                padding: 10px 12px; font-size: 13px; color: #1a1a1a;
+                background: #ffffff; line-height: 1.5;
             }
-            QScrollBar::handle:vertical {
-                background: #d1d5db; border-radius: 2px; min-height: 20px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+            QTextEdit:focus { border-color: #2b8cee; }
         """)
+        layout.addWidget(self._edit, 1)
 
-        self._list_container = QWidget()
-        self._list_container.setStyleSheet("background: #ffffff;")
-        self._list_layout = QVBoxLayout(self._list_container)
-        self._list_layout.setContentsMargins(0, 0, 0, 0)
-        self._list_layout.setSpacing(8)
-        self._list_layout.addStretch()
+        # 底部按钮行
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
 
-        scroll.setWidget(self._list_container)
-        layout.addWidget(scroll, 1)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setFixedSize(80, 34)
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background: #ffffff; border: 1px solid #d1d5db;
+                border-radius: 6px; color: #1a1a1a; font-size: 13px;
+                font-weight: 500;
+            }
+            QPushButton:hover { background: #f9fafb; }
+        """)
+        cancel_btn.clicked.connect(self.close)
+        btn_row.addWidget(cancel_btn)
 
-    def refresh_and_show(self) -> None:
-        """刷新历史数据并显示窗口"""
-        # 清空旧内容
-        while self._list_layout.count():
-            item = self._list_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        confirm_btn = QPushButton("Confirm")
+        confirm_btn.setFixedSize(80, 34)
+        confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        confirm_btn.setStyleSheet("""
+            QPushButton {
+                background: #2b8cee; border: none; border-radius: 6px;
+                color: white; font-size: 13px; font-weight: 500;
+            }
+            QPushButton:hover { background: #2563eb; }
+            QPushButton:pressed { background: #1d4ed8; }
+        """)
+        confirm_btn.clicked.connect(self._on_confirm)
+        btn_row.addWidget(confirm_btn)
 
-        entries = load_history()
+        layout.addLayout(btn_row)
 
-        if not entries:
-            empty = QLabel("No history yet.\nHold the hotkey to dictate!")
-            empty.setStyleSheet("color: #9ca3af; font-size: 13px;")
-            empty.setWordWrap(True)
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._list_layout.addWidget(empty)
-        else:
-            # 最多显示最近 5 条
-            for entry in entries[:5]:
-                card = self._make_card(entry)
-                self._list_layout.addWidget(card)
-
-        self._list_layout.addStretch()
-
+    def refresh_and_show(self, raw_input: str, refined_output: str) -> None:
+        """用最新结果填充编辑框并显示窗口"""
+        self._current_raw_input = raw_input
+        self._current_refined_output = refined_output
+        self._edit.setPlainText(refined_output)
         self.show()
         self.raise_()
         self.activateWindow()
 
-    def _make_card(self, entry: HistoryEntry) -> QWidget:
-        """创建单条历史记录卡片"""
-        card = QWidget()
-        card.setObjectName("qCard")
-        card.setStyleSheet("""
-            QWidget#qCard {
-                background: #f9fafb;
-                border: 1px solid #e5e5e5;
-                border-radius: 8px;
-            }
-        """)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(12, 10, 12, 10)
-        card_layout.setSpacing(6)
+    def update_text(self, raw_input: str, refined_output: str) -> None:
+        """新的识别结果到达时同步更新（仅在窗口可见时调用）"""
+        self._current_raw_input = raw_input
+        self._current_refined_output = refined_output
+        self._edit.setPlainText(refined_output)
 
-        # 时间戳 + 复制按钮
-        header = QHBoxLayout()
-        ts = QLabel(entry.timestamp)
-        ts.setStyleSheet("color: #9ca3af; font-size: 11px; border: none;")
-        header.addWidget(ts)
-        header.addStretch()
-
-        copy_btn = QPushButton("📋")
-        copy_btn.setFixedSize(24, 24)
-        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.setStyleSheet("""
-            QPushButton {
-                border: none; background: transparent; font-size: 12px;
-            }
-            QPushButton:hover { background: rgba(0,0,0,0.05); border-radius: 4px; }
-        """)
-        output_text = entry.refined_output
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(output_text))
-        header.addWidget(copy_btn)
-        card_layout.addLayout(header)
-
-        # 精修结果
-        output_label = QLabel(entry.refined_output)
-        output_label.setStyleSheet(
-            "color: #1a1a1a; font-size: 13px; border: none;"
-            "border-left: 3px solid #2b8cee; padding-left: 8px;"
-        )
-        output_label.setWordWrap(True)
-        output_label.setMaximumHeight(48)
-        card_layout.addWidget(output_label)
-
-        return card
+    def _on_confirm(self) -> None:
+        """用户点击确认：如果文本有修改则提交修正"""
+        corrected = self._edit.toPlainText().strip()
+        if corrected and corrected != self._current_refined_output:
+            self.correction_submitted.emit(self._current_raw_input, corrected)
+        self.close()
 
     def keyPressEvent(self, event) -> None:
         """Escape 关闭窗口"""

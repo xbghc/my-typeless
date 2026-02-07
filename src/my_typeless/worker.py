@@ -9,7 +9,7 @@ from .recorder import Recorder
 from .stt_client import STTClient
 from .llm_client import LLMClient
 from .text_injector import inject_text
-from .history import add_history
+from .history import add_history, load_corrections
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class Worker(QObject):
     """
 
     state_changed = pyqtSignal(str)
-    result_ready = pyqtSignal(str)
+    result_ready = pyqtSignal(str, str)  # (raw_text, refined_text)
     error_occurred = pyqtSignal(str)
 
     def __init__(self, config: AppConfig):
@@ -77,10 +77,11 @@ class Worker(QObject):
                 self.state_changed.emit("idle")
                 return
 
-            # 2. LLM 精修
+            # 2. LLM 精修（附带用户修正记录作为 few-shot）
             logger.debug("Starting LLM refinement...")
             llm = LLMClient(self._config.llm)
-            refined_text = llm.refine(raw_text)
+            corrections = load_corrections()
+            refined_text = llm.refine(raw_text, corrections)
             logger.debug("LLM result: %r", refined_text)
 
             # 3. 注入文本
@@ -91,7 +92,7 @@ class Worker(QObject):
             # 4. 记录历史
             add_history(raw_text, refined_text)
 
-            self.result_ready.emit(refined_text)
+            self.result_ready.emit(raw_text, refined_text)
 
         except Exception as e:
             logger.error("Processing error: %s", e, exc_info=True)
