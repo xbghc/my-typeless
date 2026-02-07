@@ -217,7 +217,7 @@ class SettingsWindow(QMainWindow):
                 background: rgba(0, 0, 0, 0.05);
             }
         """)
-        for label, icon_char in [("General", "⚙"), ("Speech-to-Text", "🎤"), ("Text Refinement", "✏"), ("Playground", "🧪"), ("History", "📝")]:
+        for label, icon_char in [("General", "⚙"), ("Speech-to-Text", "🎤"), ("Text Refinement", "✏"), ("Glossary", "📖"), ("Playground", "🧪"), ("History", "📝")]:
             item = QListWidgetItem(f"{icon_char}  {label}")
             self._nav_list.addItem(item)
         self._nav_list.setCurrentRow(0)
@@ -245,11 +245,12 @@ class SettingsWindow(QMainWindow):
         right_content.setContentsMargins(32, 32, 32, 16)
 
         self._stack = QStackedWidget()
-        self._stack.addWidget(self._create_general_page())
-        self._stack.addWidget(self._create_stt_page())
-        self._stack.addWidget(self._create_llm_page())
-        self._stack.addWidget(self._create_test_page())
-        self._stack.addWidget(self._create_history_page())
+        self._stack.addWidget(self._create_general_page())    # 0
+        self._stack.addWidget(self._create_stt_page())        # 1
+        self._stack.addWidget(self._create_llm_page())        # 2
+        self._stack.addWidget(self._create_glossary_page())   # 3
+        self._stack.addWidget(self._create_test_page())       # 4
+        self._stack.addWidget(self._create_history_page())    # 5
         right_content.addWidget(self._stack)
 
         right_outer.addWidget(content_widget, 1)
@@ -499,7 +500,7 @@ class SettingsWindow(QMainWindow):
         layout.addWidget(self._make_field_label("System Prompt"))
         self._llm_prompt = QTextEdit()
         self._llm_prompt.setPlainText(self._config.llm.prompt)
-        self._llm_prompt.setFixedHeight(80)
+        self._llm_prompt.setFixedHeight(90)
         self._llm_prompt.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #d1d5db; border-radius: 6px;
@@ -509,32 +510,59 @@ class SettingsWindow(QMainWindow):
             QTextEdit:focus { border-color: #2b8cee; }
         """)
         layout.addWidget(self._llm_prompt)
-        layout.addSpacing(4)
-
-        glossary_label_row = QHBoxLayout()
-        glossary_label_row.addWidget(self._make_field_label("Glossary / 术语表"))
-        glossary_hint = QLabel("One term per line · Also used for speech recognition")
-        glossary_hint.setStyleSheet("color: #9ca3af; font-size: 11px;")
-        glossary_label_row.addStretch()
-        glossary_label_row.addWidget(glossary_hint)
-        layout.addLayout(glossary_label_row)
-
-        self._glossary_edit = QTextEdit()
-        self._glossary_edit.setPlainText("\n".join(self._config.glossary))
-        self._glossary_edit.setPlaceholderText("gRPC\nKubernetes\nDeepSeek\nPyQt6")
-        self._glossary_edit.setFixedHeight(70)
-        self._glossary_edit.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid #d1d5db; border-radius: 6px;
-                padding: 8px; font-size: 13px; color: #1a1a1a;
-                background: #ffffff; font-family: 'Consolas', 'SF Mono', monospace;
-            }
-            QTextEdit:focus { border-color: #2b8cee; }
-        """)
-        layout.addWidget(self._glossary_edit)
 
         layout.addStretch()
         return page
+
+    # ---- Glossary 页 ----
+    def _create_glossary_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        layout.addWidget(self._make_section_header(
+            "Glossary",
+            "Terminology for accurate speech recognition and text refinement."
+        ))
+
+        hint = QLabel("One term per line. These terms are sent to both STT and LLM to ensure correct spelling.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #5d5d5d; font-size: 12px;")
+        layout.addWidget(hint)
+
+        self._glossary_edit = QTextEdit()
+        self._glossary_edit.setPlainText("\n".join(self._config.glossary))
+        self._glossary_edit.setPlaceholderText("gRPC\nKubernetes\nDeepSeek\nPyQt6\nWebSocket")
+        self._glossary_edit.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #d1d5db; border-radius: 6px;
+                padding: 10px 12px; font-size: 13px; color: #1a1a1a;
+                background: #ffffff; font-family: 'Consolas', 'SF Mono', monospace;
+                line-height: 1.6;
+            }
+            QTextEdit:focus { border-color: #2b8cee; }
+        """)
+        layout.addWidget(self._glossary_edit, 1)
+
+        # 术语计数
+        count_row = QHBoxLayout()
+        count_row.addStretch()
+        self._glossary_count = QLabel(self._glossary_count_text())
+        self._glossary_count.setStyleSheet("color: #9ca3af; font-size: 11px;")
+        count_row.addWidget(self._glossary_count)
+        layout.addLayout(count_row)
+
+        self._glossary_edit.textChanged.connect(self._update_glossary_count)
+
+        return page
+
+    def _glossary_count_text(self) -> str:
+        lines = [l.strip() for l in self._glossary_edit.toPlainText().splitlines() if l.strip()] if hasattr(self, '_glossary_edit') else self._config.glossary
+        return f"{len(lines)} term(s)"
+
+    def _update_glossary_count(self) -> None:
+        self._glossary_count.setText(self._glossary_count_text())
 
     # ---- Test 页 ----
     def _create_test_page(self) -> QWidget:
@@ -855,8 +883,8 @@ class SettingsWindow(QMainWindow):
         self._test_status_dot.setStyleSheet("color: #22c55e; font-size: 8px;")
         self._test_status.setText("System Ready")
         self._test_status.setStyleSheet("color: #5d5d5d; font-size: 11px; font-weight: 500;")
-        # 切换到 Test 页 (index 3)
-        self._nav_list.setCurrentRow(3)
+        # 切换到 Test 页 (index 4)
+        self._nav_list.setCurrentRow(4)
 
     def _run_test(self) -> None:
         """使用当前配置调用 LLM 精修测试文本"""
@@ -920,7 +948,7 @@ class SettingsWindow(QMainWindow):
     def _switch_page(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
         # 切换到历史页时刷新
-        if index == 4:
+        if index == 5:
             self._refresh_history()
 
     def _save(self) -> None:
