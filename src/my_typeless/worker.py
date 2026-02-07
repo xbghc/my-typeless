@@ -69,7 +69,8 @@ class Worker(QObject):
             # 1. 语音转文字
             logger.debug("Starting STT...")
             stt = STTClient(self._config.stt)
-            raw_text = stt.transcribe(audio_data)
+            stt_prompt = self._config.build_stt_prompt()
+            raw_text = stt.transcribe(audio_data, prompt=stt_prompt)
             logger.debug("STT result: %r", raw_text)
 
             if not raw_text or not raw_text.strip():
@@ -80,7 +81,8 @@ class Worker(QObject):
             # 2. LLM 精修
             logger.debug("Starting LLM refinement...")
             llm = LLMClient(self._config.llm)
-            refined_text = llm.refine(raw_text)
+            system_prompt = self._config.build_llm_system_prompt()
+            refined_text = llm.refine(raw_text, system_prompt=system_prompt)
             logger.debug("LLM result: %r", refined_text)
 
             # 3. 注入文本

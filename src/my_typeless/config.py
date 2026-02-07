@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
-from typing import Optional
+from typing import Optional, List
 
 # 开发模式：每次启动强制使用代码中的最新提示词
 # 生产模式：仅首次初始化时设置默认提示词，之后用户可自行修改
@@ -57,6 +57,21 @@ class AppConfig:
     start_with_windows: bool = False
     stt: STTConfig = field(default_factory=STTConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
+    glossary: List[str] = field(default_factory=list)
+
+    def build_llm_system_prompt(self) -> str:
+        """组装完整的 LLM system prompt（基础 prompt + 术语表）"""
+        parts = [self.llm.prompt]
+        if self.glossary:
+            terms = "\n".join(f"- {t}" for t in self.glossary)
+            parts.append(f"## 术语表\n以下术语在转录和精修时需注意正确写法：\n{terms}")
+        return "\n\n".join(parts)
+
+    def build_stt_prompt(self) -> str:
+        """组装 STT prompt（术语列表，帮助 Whisper 正确识别专有名词）"""
+        if not self.glossary:
+            return ""
+        return ", ".join(self.glossary)
 
     def save(self) -> None:
         """保存配置到 JSON 文件"""
@@ -76,11 +91,15 @@ class AppConfig:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
             stt = STTConfig(**data.get("stt", {}))
             llm = LLMConfig(**data.get("llm", {}))
+            glossary = data.get("glossary", [])
+            if not isinstance(glossary, list):
+                glossary = []
             config = cls(
                 hotkey=data.get("hotkey", "right alt"),
                 start_with_windows=data.get("start_with_windows", False),
                 stt=stt,
                 llm=llm,
+                glossary=glossary,
             )
         except (json.JSONDecodeError, TypeError, KeyError):
             config = cls()

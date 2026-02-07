@@ -499,7 +499,7 @@ class SettingsWindow(QMainWindow):
         layout.addWidget(self._make_field_label("System Prompt"))
         self._llm_prompt = QTextEdit()
         self._llm_prompt.setPlainText(self._config.llm.prompt)
-        self._llm_prompt.setFixedHeight(90)
+        self._llm_prompt.setFixedHeight(80)
         self._llm_prompt.setStyleSheet("""
             QTextEdit {
                 border: 1px solid #d1d5db; border-radius: 6px;
@@ -509,6 +509,29 @@ class SettingsWindow(QMainWindow):
             QTextEdit:focus { border-color: #2b8cee; }
         """)
         layout.addWidget(self._llm_prompt)
+        layout.addSpacing(4)
+
+        glossary_label_row = QHBoxLayout()
+        glossary_label_row.addWidget(self._make_field_label("Glossary / 术语表"))
+        glossary_hint = QLabel("One term per line · Also used for speech recognition")
+        glossary_hint.setStyleSheet("color: #9ca3af; font-size: 11px;")
+        glossary_label_row.addStretch()
+        glossary_label_row.addWidget(glossary_hint)
+        layout.addLayout(glossary_label_row)
+
+        self._glossary_edit = QTextEdit()
+        self._glossary_edit.setPlainText("\n".join(self._config.glossary))
+        self._glossary_edit.setPlaceholderText("gRPC\nKubernetes\nDeepSeek\nPyQt6")
+        self._glossary_edit.setFixedHeight(70)
+        self._glossary_edit.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #d1d5db; border-radius: 6px;
+                padding: 8px; font-size: 13px; color: #1a1a1a;
+                background: #ffffff; font-family: 'Consolas', 'SF Mono', monospace;
+            }
+            QTextEdit:focus { border-color: #2b8cee; }
+        """)
+        layout.addWidget(self._glossary_edit)
 
         layout.addStretch()
         return page
@@ -844,14 +867,20 @@ class SettingsWindow(QMainWindow):
             self._test_status.setStyleSheet("color: #ef4444; font-size: 11px; font-weight: 500;")
             return
 
-        # 读取当前表单中的 LLM 配置（可能尚未保存）
-        from config import LLMConfig
+        # 读取当前表单中的配置（可能尚未保存）
+        from .config import LLMConfig, AppConfig
         llm_config = LLMConfig(
             base_url=self._llm_url.text().strip() or self._config.llm.base_url,
             api_key=self._llm_key.text().strip() or self._config.llm.api_key,
             model=self._llm_model.text().strip() or self._config.llm.model,
             prompt=self._llm_prompt.toPlainText().strip() or self._config.llm.prompt,
         )
+        # 解析当前表单中的术语表
+        glossary_text = self._glossary_edit.toPlainText()
+        glossary = [line.strip() for line in glossary_text.splitlines() if line.strip()]
+        # 组装包含术语表的完整 system prompt
+        temp_config = AppConfig(llm=llm_config, glossary=glossary)
+        full_system_prompt = temp_config.build_llm_system_prompt()
 
         self._test_run_btn.setEnabled(False)
         self._test_run_btn.setText("…")
@@ -863,7 +892,7 @@ class SettingsWindow(QMainWindow):
         def _call():
             try:
                 client = LLMClient(llm_config)
-                result = client.refine(raw_text)
+                result = client.refine(raw_text, system_prompt=full_system_prompt)
                 self._test_done.emit(result, False)
             except Exception as e:
                 self._test_done.emit(str(e), True)
@@ -907,6 +936,12 @@ class SettingsWindow(QMainWindow):
         self._config.llm.api_key = self._llm_key.text().strip()
         self._config.llm.model = self._llm_model.text().strip()
         self._config.llm.prompt = self._llm_prompt.toPlainText().strip()
+
+        # 解析术语表：每行一个术语，忽略空行
+        glossary_text = self._glossary_edit.toPlainText()
+        self._config.glossary = [
+            line.strip() for line in glossary_text.splitlines() if line.strip()
+        ]
 
         self._config.save()
         self.settings_saved.emit(self._config)

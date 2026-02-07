@@ -15,12 +15,13 @@ class STTClient:
             api_key=config.api_key,
         )
 
-    def transcribe(self, audio_data: bytes) -> str:
+    def transcribe(self, audio_data: bytes, prompt: str = "") -> str:
         """
         将音频数据转录为文本
 
         Args:
             audio_data: WAV 格式的音频字节数据
+            prompt: 可选的提示词，帮助 Whisper 正确识别专有名词
 
         Returns:
             转录的原始文本
@@ -28,8 +29,12 @@ class STTClient:
         audio_file = io.BytesIO(audio_data)
         audio_file.name = "recording.wav"
 
-        response = self._client.audio.transcriptions.create(
-            model=self._config.model,
-            file=audio_file,
-        )
+        kwargs = {
+            "model": self._config.model,
+            "file": audio_file,
+        }
+        if prompt:
+            kwargs["prompt"] = prompt
+
+        response = self._client.audio.transcriptions.create(**kwargs)
         return response.text
