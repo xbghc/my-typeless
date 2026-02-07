@@ -11,7 +11,7 @@ dependencies = [
     "pywin32>=311",
 ]
 
-[project.scripts]
+[project.gui-scripts]
 my-typeless = "my_typeless.main:main"
 
 [build-system]
