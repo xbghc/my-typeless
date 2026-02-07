@@ -9,7 +9,7 @@ from PyQt6.QtGui import QIcon
 from .config import AppConfig
 from .hotkey import HotkeyListener
 from .worker import Worker
-from .tray import TrayIcon, SettingsWindow
+from .tray import TrayIcon, SettingsWindow, QuickPopup
 
 
 class MyTypelessApp:
@@ -33,6 +33,7 @@ class MyTypelessApp:
         self._hotkey = HotkeyListener(self._config.hotkey)
         self._tray = TrayIcon()
         self._settings_window: SettingsWindow | None = None
+        self._quick_popup: QuickPopup | None = None
 
         self._connect_signals()
 
@@ -41,6 +42,7 @@ class MyTypelessApp:
         # 热键 → 录音控制
         self._hotkey.key_pressed.connect(self._worker.start_recording)
         self._hotkey.key_released.connect(self._worker.stop_recording_and_process)
+        self._hotkey.double_clicked.connect(self._show_quick_popup)
 
         # Worker 状态 → 托盘图标
         self._worker.state_changed.connect(self._tray.set_state)
@@ -49,6 +51,12 @@ class MyTypelessApp:
         # 托盘菜单
         self._tray.show_settings.connect(self._open_settings)
         self._tray.quit_app.connect(self._quit)
+
+    def _show_quick_popup(self) -> None:
+        """双击热键时弹出快捷窗口"""
+        if self._quick_popup is None:
+            self._quick_popup = QuickPopup()
+        self._quick_popup.refresh_and_show()
 
     def _open_settings(self) -> None:
         """打开设置窗口"""

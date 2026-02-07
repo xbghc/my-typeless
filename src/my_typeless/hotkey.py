@@ -1,5 +1,6 @@
 """全局热键监听模块 - 使用 keyboard 库"""
 
+import time
 import keyboard
 import ctypes
 from ctypes import wintypes
@@ -64,12 +65,20 @@ class HotkeyListener(QObject):
 
     key_pressed = pyqtSignal()
     key_released = pyqtSignal()
+    double_clicked = pyqtSignal()
+
+    # 短按阈值（秒）：按下时长小于此值视为"轻点"
+    SHORT_PRESS_THRESHOLD = 0.3
+    # 双击间隔阈值（秒）：两次轻点的松开时间间隔小于此值视为双击
+    DOUBLE_CLICK_INTERVAL = 0.5
 
     def __init__(self, hotkey: str = "right alt"):
         super().__init__()
         self._hotkey = hotkey.lower()
         self._is_pressed = False
         self._hook_id = None
+        self._press_time: float = 0.0
+        self._last_short_release_time: float = 0.0
         # 必须保持回调引用防止被 GC
         self._hook_proc = LowLevelKeyboardProc(self._ll_keyboard_proc)
 
@@ -113,12 +122,26 @@ class HotkeyListener(QObject):
                 if wParam in (WM_KEYDOWN, WM_SYSKEYDOWN):
                     if not self._is_pressed:
                         self._is_pressed = True
+                        self._press_time = time.monotonic()
                         self.key_pressed.emit()
                     return 1  # 吞掉事件，防止 Alt 激活菜单
                 elif wParam in (WM_KEYUP, WM_SYSKEYUP):
                     if self._is_pressed:
                         self._is_pressed = False
+                        press_duration = time.monotonic() - self._press_time
                         self.key_released.emit()
+
+                        # 双击检测：基于短按（不影响长按录音）
+                        if press_duration < self.SHORT_PRESS_THRESHOLD:
+                            now = time.monotonic()
+                            if (now - self._last_short_release_time) < self.DOUBLE_CLICK_INTERVAL:
+                                self._last_short_release_time = 0.0
+                                self.double_clicked.emit()
+                            else:
+                                self._last_short_release_time = now
+                        else:
+                            # 长按重置双击计数
+                            self._last_short_release_time = 0.0
                     return 1  # 吞掉事件
 
         return _user32.CallNextHookEx(self._hook_id, nCode, wParam, lParam)
