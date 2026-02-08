@@ -31,19 +31,18 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UsePreviousAppDir=yes
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "autostart"; Description: "开机自动启动"; GroupDescription: "其他选项:"
+Name: "autostart"; Description: "Launch at startup"; GroupDescription: "Other options:"
 
 [Files]
 Source: "dist\MyTypeless.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\My Typeless"; Filename: "{app}\MyTypeless.exe"
-Name: "{group}\卸载 My Typeless"; Filename: "{uninstallexe}"
+Name: "{group}\Uninstall My Typeless"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\My Typeless"; Filename: "{app}\MyTypeless.exe"; Tasks: desktopicon
 
 [Registry]
@@ -51,4 +50,4 @@ Name: "{autodesktop}\My Typeless"; Filename: "{app}\MyTypeless.exe"; Tasks: desk
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MyTypeless"; ValueData: """{app}\MyTypeless.exe"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
-Filename: "{app}\MyTypeless.exe"; Description: "启动 My Typeless"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\MyTypeless.exe"; Description: "Launch My Typeless"; Flags: nowait postinstall skipifsilent
