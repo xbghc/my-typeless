@@ -10,6 +10,7 @@ from .config import AppConfig
 from .hotkey import HotkeyListener
 from .worker import Worker
 from .tray import TrayIcon, SettingsWindow
+from .updater import UpdateChecker, apply_update, prompt_and_apply_update
 
 
 class MyTypelessApp:
@@ -33,6 +34,12 @@ class MyTypelessApp:
         self._hotkey = HotkeyListener(self._config.hotkey)
         self._tray = TrayIcon()
         self._settings_window: SettingsWindow | None = None
+
+        # 自动更新检查
+        self._updater = UpdateChecker()
+        self._updater.update_available.connect(self._on_update_available)
+        self._updater.update_downloaded.connect(self._on_update_downloaded)
+        self._updater.update_error.connect(self._on_error)
 
         self._connect_signals()
 
@@ -77,8 +84,18 @@ class MyTypelessApp:
             3000,
         )
 
+    def _on_update_available(self, release) -> None:
+        """发现新版本时提示用户"""
+        prompt_and_apply_update(release, self._updater)
+
+    def _on_update_downloaded(self, path: str) -> None:
+        """更新下载完成，执行替换并重启"""
+        from pathlib import Path
+        apply_update(Path(path))
+
     def _quit(self) -> None:
         """退出应用"""
+        self._updater.stop()
         self._hotkey.stop()
         self._worker.cleanup()
         self._tray.hide()
@@ -88,6 +105,7 @@ class MyTypelessApp:
         """启动应用"""
         self._hotkey.start()
         self._tray.show()
+        self._updater.start(immediate=True)
         return self._app.exec()
 
 
