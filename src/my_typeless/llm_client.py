@@ -14,20 +14,23 @@ class LLMClient:
             api_key=config.api_key,
         )
 
-    def refine(self, raw_text: str) -> str:
+    def refine(self, raw_text: str, system_prompt: str = "") -> str:
         """
         将口语文本精修为书面文字
 
         Args:
             raw_text: STT 产生的原始转录文本
+            system_prompt: 可选的完整 system prompt（含术语表等），
+                           未提供时回退到 config 中的基础 prompt
 
         Returns:
             精修后的书面文本
         """
+        prompt = system_prompt or self._config.prompt
         response = self._client.chat.completions.create(
             model=self._config.model,
             messages=[
-                {"role": "system", "content": self._config.prompt},
+                {"role": "system", "content": prompt},
                 {"role": "user", "content": raw_text},
             ],
         )
