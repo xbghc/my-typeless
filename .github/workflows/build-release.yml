@@ -66,8 +66,12 @@ jobs:
           Copy-Item "$installed\include\portaudio.h" "$paPath\include\"
           Copy-Item "$installed\lib\portaudio.lib" "$paPath\lib\x64\Release\portaudio_x64.lib"
 
+          # 设置 PORTAUDIO_PATH (pyaudio setup.py) + INCLUDE/LIB (MSVC compiler/linker)
           echo "PORTAUDIO_PATH=$paPath" >> $env:GITHUB_ENV
+          echo "INCLUDE=$paPath\include;$env:INCLUDE" >> $env:GITHUB_ENV
+          echo "LIB=$paPath\lib\x64\Release;$env:LIB" >> $env:GITHUB_ENV
           Write-Host "PortAudio configured at $paPath"
+          Get-ChildItem -Recurse $paPath | Select-Object FullName
 
       - name: Install dependencies
         run: |
