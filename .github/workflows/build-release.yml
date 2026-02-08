@@ -57,31 +57,21 @@ jobs:
           $vcpkgRoot = "$env:VCPKG_INSTALLATION_ROOT"
           $installed = "$vcpkgRoot\installed\arm64-windows"
 
-          # pyaudio 的 setup.py 期望特定目录结构:
-          #   $PORTAUDIO_PATH\include\portaudio.h
-          #   $PORTAUDIO_PATH\lib\x64\Release\portaudio_x64.lib
-          $paPath = "$env:RUNNER_TEMP\portaudio"
-          New-Item "$paPath\include" -ItemType Directory -Force
-          New-Item "$paPath\lib\x64\Release" -ItemType Directory -Force
-          Copy-Item "$installed\include\portaudio.h" "$paPath\include\"
-          Copy-Item "$installed\lib\portaudio.lib" "$paPath\lib\x64\Release\portaudio_x64.lib"
-
-          # 设置 PORTAUDIO_PATH (pyaudio setup.py) + INCLUDE/LIB (MSVC compiler/linker)
-          echo "PORTAUDIO_PATH=$paPath" >> $env:GITHUB_ENV
-          echo "INCLUDE=$paPath\include;$env:INCLUDE" >> $env:GITHUB_ENV
-          echo "LIB=$paPath\lib\x64\Release;$env:LIB" >> $env:GITHUB_ENV
-          Write-Host "PortAudio configured at $paPath"
-          Get-ChildItem -Recurse $paPath | Select-Object FullName
+          # 设置编译器/链接器 环境变量
+          # INCLUDE: 让 cl.exe 找到 portaudio.h
+          # LIB: 让 link.exe 找到 portaudio.lib
+          # LINK: 强制链接 portaudio.lib (pyaudio 在 ARM64 不会自动添加)
+          echo "INCLUDE=$installed\include;$env:INCLUDE" >> $env:GITHUB_ENV
+          echo "LIB=$installed\lib;$env:LIB" >> $env:GITHUB_ENV
+          echo "LINK=portaudio.lib" >> $env:GITHUB_ENV
+          Write-Host "PortAudio configured: $installed"
+          Get-ChildItem "$installed\lib\portaudio*"
+          Get-ChildItem "$installed\include\portaudio*"
 
       - name: Install dependencies
-        shell: pwsh
         run: |
-          pip install --upgrade pip setuptools wheel
+          pip install --upgrade pip
           pip install pyinstaller
-          if ("${{ matrix.arch }}" -eq "arm64") {
-            # ARM64: pyaudio 需要禁用 build isolation 以正确传递 PORTAUDIO_PATH
-            pip install --no-build-isolation pyaudio
-          }
           pip install .
 
       - name: Update version in source
