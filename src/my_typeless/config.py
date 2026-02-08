@@ -66,8 +66,8 @@ class AppConfig:
             terms = "\n".join(f"- {t}" for t in self.glossary)
             parts.append(
                 "## 术语表\n"
-                "以下是用户领域的专用术语。语音识别常将它们误转为同音/近音词，"
-                "精修时如果遇到语义合理的替换，应优先使用术语表中的写法：\n"
+                "以下是用户领域的专用术语，当它们出现在输入中时必须原样保留，"
+                "不要替换为同音/近音词（如『制伏』不要改为『制服』）：\n"
                 f"{terms}"
             )
         return "\n\n".join(parts)
