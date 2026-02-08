@@ -64,11 +64,28 @@ jobs:
             exit 1
           }
 
-      - name: Upload build artifact
+      - name: Build installer with Inno Setup
+        run: |
+          iscc /DAPP_VERSION=${{ steps.version.outputs.version }} installer.iss
+
+      - name: Verify installer
+        run: |
+          $setup = "dist/MyTypeless-Setup.exe"
+          if (Test-Path $setup) {
+            $size = (Get-Item $setup).Length / 1MB
+            Write-Host "Installer built! Size: $([math]::Round($size, 2)) MB"
+          } else {
+            Write-Error "Installer build failed: $setup not found"
+            exit 1
+          }
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: MyTypeless-${{ steps.version.outputs.version }}
-          path: dist/MyTypeless.exe
+          path: |
+            dist/MyTypeless.exe
+            dist/MyTypeless-Setup.exe
           retention-days: 30
 
   release:
@@ -110,5 +127,6 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/MyTypeless.exe
+            artifacts/MyTypeless-Setup.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

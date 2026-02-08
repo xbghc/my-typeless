@@ -10,8 +10,6 @@
 
 import json
 import logging
-import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -34,7 +32,7 @@ GITHUB_REPO = "my-typeless"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
 CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000  # 4 小时
 
-ASSET_NAME = "MyTypeless.exe"
+ASSET_NAME = "MyTypeless-Setup.exe"
 
 
 # ── 数据结构 ──────────────────────────────────────────────────────────────
@@ -146,38 +144,24 @@ def download_release(release: ReleaseInfo, dest: Path,
 
 
 # ── 更新执行 ──────────────────────────────────────────────────────────────
-def apply_update(new_exe: Path) -> bool:
+def apply_update(setup_exe: Path) -> bool:
     """
-    用下载的新版替换当前 exe，然后重启。
-    策略: 把当前 exe 重命名为 .old，新 exe 改名为当前名字，
-    然后启动新进程、退出当前进程。
+    运行下载的安装程序执行静默升级，然后退出当前进程。
+    Inno Setup 支持 /SILENT 静默安装，/SUPPRESSMSGBOXES 抑制弹窗，
+    /CLOSEAPPLICATIONS 自动关闭旧进程。
     """
-    if getattr(sys, "frozen", False):
-        current_exe = Path(sys.executable)
-    else:
-        # 开发模式下不执行替换
-        logger.info("Dev mode - skipping exe replacement")
+    if not setup_exe.exists():
+        logger.error("Setup file not found: %s", setup_exe)
         return False
 
-    old_exe = current_exe.with_suffix(".old")
     try:
-        # 1. 当前 exe → .old
-        if old_exe.exists():
-            old_exe.unlink()
-        current_exe.rename(old_exe)
-
-        # 2. 新 exe → 当前名
-        shutil.move(str(new_exe), str(current_exe))
-
-        # 3. 启动新版并退出
-        subprocess.Popen([str(current_exe)], close_fds=True)
+        subprocess.Popen(
+            [str(setup_exe), "/SILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS"],
+            close_fds=True,
+        )
         sys.exit(0)
-
     except OSError as e:
-        logger.error("Failed to apply update: %s", e)
-        # 回滚
-        if old_exe.exists() and not current_exe.exists():
-            old_exe.rename(current_exe)
+        logger.error("Failed to launch installer: %s", e)
         return False
 
 
@@ -204,8 +188,7 @@ class _DownloadWorker(QObject):
         self._release = release
 
     def run(self):
-        # 下载时使用通用文件名，方便替换
-        tmp = Path(tempfile.mkdtemp()) / "MyTypeless.exe"
+        tmp = Path(tempfile.mkdtemp()) / "MyTypeless-Setup.exe"
         ok = download_release(
             self._release, tmp,
             progress_cb=lambda d, t: self.progress.emit(d, t),
