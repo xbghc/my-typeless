@@ -55,12 +55,19 @@ jobs:
           # ARM64 没有预构建的 pyaudio wheel，需要先安装 PortAudio
           vcpkg install portaudio:arm64-windows
           $vcpkgRoot = "$env:VCPKG_INSTALLATION_ROOT"
-          $installed = "$vcpkgRoot/installed/arm64-windows"
-          echo "PORTAUDIO_INCLUDE=$installed/include" >> $env:GITHUB_ENV
-          echo "PORTAUDIO_LIB=$installed/lib" >> $env:GITHUB_ENV
-          # 设置编译器能找到头文件和库
-          echo "INCLUDE=$installed/include;$env:INCLUDE" >> $env:GITHUB_ENV
-          echo "LIB=$installed/lib;$env:LIB" >> $env:GITHUB_ENV
+          $installed = "$vcpkgRoot\installed\arm64-windows"
+
+          # pyaudio 的 setup.py 期望特定目录结构:
+          #   $PORTAUDIO_PATH\include\portaudio.h
+          #   $PORTAUDIO_PATH\lib\x64\Release\portaudio_x64.lib
+          $paPath = "$env:RUNNER_TEMP\portaudio"
+          New-Item "$paPath\include" -ItemType Directory -Force
+          New-Item "$paPath\lib\x64\Release" -ItemType Directory -Force
+          Copy-Item "$installed\include\portaudio.h" "$paPath\include\"
+          Copy-Item "$installed\lib\portaudio.lib" "$paPath\lib\x64\Release\portaudio_x64.lib"
+
+          echo "PORTAUDIO_PATH=$paPath" >> $env:GITHUB_ENV
+          Write-Host "PortAudio configured at $paPath"
 
       - name: Install dependencies
         run: |
