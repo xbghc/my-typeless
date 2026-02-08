@@ -526,43 +526,106 @@ class SettingsWindow(QMainWindow):
             "Terminology for accurate speech recognition and text refinement."
         ))
 
-        hint = QLabel("One term per line. These terms are sent to both STT and LLM to ensure correct spelling.")
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color: #5d5d5d; font-size: 12px;")
-        layout.addWidget(hint)
-
-        self._glossary_edit = QTextEdit()
-        self._glossary_edit.setPlainText("\n".join(self._config.glossary))
-        self._glossary_edit.setPlaceholderText("gRPC\nKubernetes\nDeepSeek\nPyQt6\nWebSocket")
-        self._glossary_edit.setStyleSheet("""
-            QTextEdit {
+        # 添加术语行：输入框 + 按钮
+        add_row = QHBoxLayout()
+        self._glossary_input = QLineEdit()
+        self._glossary_input.setPlaceholderText("Enter a term, e.g. gRPC")
+        self._glossary_input.setFixedHeight(34)
+        self._glossary_input.setStyleSheet("""
+            QLineEdit {
                 border: 1px solid #d1d5db; border-radius: 6px;
-                padding: 10px 12px; font-size: 13px; color: #1a1a1a;
-                background: #ffffff; font-family: 'Consolas', 'SF Mono', monospace;
-                line-height: 1.6;
+                padding: 4px 12px; font-size: 13px; color: #1a1a1a;
+                background: #ffffff;
             }
-            QTextEdit:focus { border-color: #2b8cee; }
+            QLineEdit:focus { border-color: #2b8cee; }
         """)
-        layout.addWidget(self._glossary_edit, 1)
+        self._glossary_input.returnPressed.connect(self._add_glossary_term)
+        add_row.addWidget(self._glossary_input)
 
-        # 术语计数
-        count_row = QHBoxLayout()
-        count_row.addStretch()
-        self._glossary_count = QLabel(self._glossary_count_text())
+        add_btn = QPushButton("+ Add")
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setFixedSize(72, 34)
+        add_btn.setStyleSheet("""
+            QPushButton {
+                background: #2b8cee; border: none; border-radius: 6px;
+                color: white; font-size: 13px; font-weight: 500;
+            }
+            QPushButton:hover { background: #2563eb; }
+            QPushButton:pressed { background: #1d4ed8; }
+        """)
+        add_btn.clicked.connect(self._add_glossary_term)
+        add_row.addWidget(add_btn)
+        layout.addLayout(add_row)
+
+        # 术语列表
+        self._glossary_list = QListWidget()
+        self._glossary_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self._glossary_list.setStyleSheet("""
+            QListWidget {
+                border: 1px solid #e5e5e5; border-radius: 8px;
+                background: #ffffff; font-size: 13px;
+                font-family: 'Consolas', 'SF Mono', monospace;
+                outline: none;
+            }
+            QListWidget::item {
+                padding: 6px 12px; border-bottom: 1px solid #f3f4f6;
+                color: #1a1a1a;
+            }
+            QListWidget::item:selected {
+                background: #eff6ff; color: #1a1a1a;
+            }
+            QListWidget::item:hover:!selected {
+                background: #f9fafb;
+            }
+        """)
+        for term in self._config.glossary:
+            self._glossary_list.addItem(term)
+        layout.addWidget(self._glossary_list, 1)
+
+        # 底部：计数 + 删除按钮
+        bottom_row = QHBoxLayout()
+        self._glossary_count = QLabel(f"{self._glossary_list.count()} term(s)")
         self._glossary_count.setStyleSheet("color: #9ca3af; font-size: 11px;")
-        count_row.addWidget(self._glossary_count)
-        layout.addLayout(count_row)
+        bottom_row.addWidget(self._glossary_count)
+        bottom_row.addStretch()
 
-        self._glossary_edit.textChanged.connect(self._update_glossary_count)
+        del_btn = QPushButton("🗑  Delete Selected")
+        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        del_btn.setStyleSheet("""
+            QPushButton {
+                border: none; background: transparent;
+                color: #ef4444; font-size: 12px; font-weight: 600;
+                padding: 4px 8px; border-radius: 6px;
+            }
+            QPushButton:hover { background: rgba(239, 68, 68, 0.08); }
+        """)
+        del_btn.clicked.connect(self._delete_glossary_terms)
+        bottom_row.addWidget(del_btn)
+        layout.addLayout(bottom_row)
 
         return page
 
-    def _glossary_count_text(self) -> str:
-        lines = [l.strip() for l in self._glossary_edit.toPlainText().splitlines() if l.strip()] if hasattr(self, '_glossary_edit') else self._config.glossary
-        return f"{len(lines)} term(s)"
+    def _add_glossary_term(self) -> None:
+        term = self._glossary_input.text().strip()
+        if not term:
+            return
+        # 去重
+        existing = [self._glossary_list.item(i).text() for i in range(self._glossary_list.count())]
+        if term in existing:
+            self._glossary_input.clear()
+            return
+        self._glossary_list.addItem(term)
+        self._glossary_input.clear()
+        self._glossary_count.setText(f"{self._glossary_list.count()} term(s)")
 
-    def _update_glossary_count(self) -> None:
-        self._glossary_count.setText(self._glossary_count_text())
+    def _delete_glossary_terms(self) -> None:
+        for item in reversed(self._glossary_list.selectedItems()):
+            self._glossary_list.takeItem(self._glossary_list.row(item))
+        self._glossary_count.setText(f"{self._glossary_list.count()} term(s)")
+
+    def _get_glossary(self) -> list:
+        """从列表控件读取所有术语"""
+        return [self._glossary_list.item(i).text() for i in range(self._glossary_list.count())]
 
     # ---- Test 页 ----
     def _create_test_page(self) -> QWidget:
@@ -903,10 +966,7 @@ class SettingsWindow(QMainWindow):
             model=self._llm_model.text().strip() or self._config.llm.model,
             prompt=self._llm_prompt.toPlainText().strip() or self._config.llm.prompt,
         )
-        # 解析当前表单中的术语表
-        glossary_text = self._glossary_edit.toPlainText()
-        glossary = [line.strip() for line in glossary_text.splitlines() if line.strip()]
-        # 组装包含术语表的完整 system prompt
+        glossary = self._get_glossary()
         temp_config = AppConfig(llm=llm_config, glossary=glossary)
         full_system_prompt = temp_config.build_llm_system_prompt()
 
@@ -965,11 +1025,7 @@ class SettingsWindow(QMainWindow):
         self._config.llm.model = self._llm_model.text().strip()
         self._config.llm.prompt = self._llm_prompt.toPlainText().strip()
 
-        # 解析术语表：每行一个术语，忽略空行
-        glossary_text = self._glossary_edit.toPlainText()
-        self._config.glossary = [
-            line.strip() for line in glossary_text.splitlines() if line.strip()
-        ]
+        self._config.glossary = self._get_glossary()
 
         self._config.save()
         self.settings_saved.emit(self._config)
