@@ -60,16 +60,9 @@ class AppConfig:
     glossary: List[str] = field(default_factory=list)
 
     def build_llm_system_prompt(self) -> str:
-        """组装完整的 LLM system prompt（基础 prompt + 术语表）"""
+        """组装完整的 LLM system prompt（基础 prompt，预留扩展点）"""
         parts = [self.llm.prompt]
-        if self.glossary:
-            terms = "\n".join(f"- {t}" for t in self.glossary)
-            parts.append(
-                "## 术语表\n"
-                "以下是用户领域的专用术语，当它们出现在输入中时必须原样保留，"
-                "不要替换为同音/近音词（如『制伏』不要改为『制服』）：\n"
-                f"{terms}"
-            )
+        # 未来可在此追加 user_context 等段落
         return "\n\n".join(parts)
 
     def build_stt_prompt(self) -> str:
