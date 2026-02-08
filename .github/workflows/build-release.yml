@@ -48,6 +48,20 @@ jobs:
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION (${{ matrix.arch }})"
 
+      - name: Install PortAudio (ARM64)
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          # ARM64 没有预构建的 pyaudio wheel，需要先安装 PortAudio
+          vcpkg install portaudio:arm64-windows
+          $vcpkgRoot = "$env:VCPKG_INSTALLATION_ROOT"
+          $installed = "$vcpkgRoot/installed/arm64-windows"
+          echo "PORTAUDIO_INCLUDE=$installed/include" >> $env:GITHUB_ENV
+          echo "PORTAUDIO_LIB=$installed/lib" >> $env:GITHUB_ENV
+          # 设置编译器能找到头文件和库
+          echo "INCLUDE=$installed/include;$env:INCLUDE" >> $env:GITHUB_ENV
+          echo "LIB=$installed/lib;$env:LIB" >> $env:GITHUB_ENV
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
