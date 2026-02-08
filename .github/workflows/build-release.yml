@@ -15,9 +15,17 @@ permissions:
 
 jobs:
   build:
-    name: Build Windows Executable
-    runs-on: windows-latest
-    
+    name: Build ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,12 +42,11 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
           else
-            # 从 tag 提取版本号 (去掉 'v' 前缀)
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          echo "Building version: $VERSION (${{ matrix.arch }})"
 
       - name: Install dependencies
         run: |
@@ -51,41 +58,63 @@ jobs:
         run: python scripts/build.py --version ${{ steps.version.outputs.version }} --no-build
 
       - name: Build with PyInstaller
+        env:
+          MY_TYPELESS_ARCH: ${{ matrix.arch }}
         run: |
           pyinstaller my_typeless.spec --clean --noconfirm
 
+      - name: Rename output
+        run: |
+          Move-Item "dist/MyTypeless.exe" "dist/MyTypeless-${{ matrix.arch }}.exe"
+
       - name: Verify output
         run: |
-          if (Test-Path "dist/MyTypeless.exe") {
-            $size = (Get-Item "dist/MyTypeless.exe").Length / 1MB
-            Write-Host "Build successful! Size: $([math]::Round($size, 2)) MB"
+          $exe = "dist/MyTypeless-${{ matrix.arch }}.exe"
+          if (Test-Path $exe) {
+            $size = (Get-Item $exe).Length / 1MB
+            Write-Host "Build successful! ${{ matrix.arch }} Size: $([math]::Round($size, 2)) MB"
           } else {
-            Write-Error "Build failed: MyTypeless.exe not found"
+            Write-Error "Build failed: $exe not found"
             exit 1
           }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MyTypeless-${{ steps.version.outputs.version }}
-          path: dist/MyTypeless.exe
+          name: MyTypeless-${{ steps.version.outputs.version }}-${{ matrix.arch }}
+          path: dist/MyTypeless-${{ matrix.arch }}.exe
           retention-days: 30
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "My Typeless ${{ steps.version.outputs.tag }}"
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: dist/MyTypeless.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
 
-      - name: Create GitHub Release (manual)
-        if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: MyTypeless-${{ steps.version.outputs.version }}-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lhR artifacts/
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -93,6 +122,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: dist/MyTypeless.exe
+          files: |
+            artifacts/MyTypeless-amd64.exe
+            artifacts/MyTypeless-arm64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
