@@ -64,7 +64,12 @@ class AppConfig:
         parts = [self.llm.prompt]
         if self.glossary:
             terms = "\n".join(f"- {t}" for t in self.glossary)
-            parts.append(f"## 术语表\n以下术语在转录和精修时需注意正确写法：\n{terms}")
+            parts.append(
+                "## 术语表\n"
+                "以下是用户领域的专用术语。语音识别常将它们误转为同音/近音词，"
+                "精修时如果遇到语义合理的替换，应优先使用术语表中的写法：\n"
+                f"{terms}"
+            )
         return "\n\n".join(parts)
 
     def build_stt_prompt(self) -> str:
