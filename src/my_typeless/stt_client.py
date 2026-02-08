@@ -2,7 +2,7 @@
 
 import io
 from openai import OpenAI
-from .config import STTConfig
+from my_typeless.config import STTConfig
 
 
 class STTClient:

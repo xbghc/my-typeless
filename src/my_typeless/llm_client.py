@@ -1,7 +1,7 @@
 """LLM 文本精修客户端 - 使用 OpenAI 兼容 API"""
 
 from openai import OpenAI
-from .config import LLMConfig
+from my_typeless.config import LLMConfig
 
 
 class LLMClient:

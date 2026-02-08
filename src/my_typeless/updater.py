@@ -11,7 +11,6 @@
 import json
 import logging
 import os
-import platform
 import shutil
 import subprocess
 import sys
@@ -25,7 +24,7 @@ from urllib.request import Request, urlopen
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QMessageBox
 
-from .version import __version__
+from my_typeless.version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -35,21 +34,7 @@ GITHUB_REPO = "my-typeless"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
 CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000  # 4 小时
 
-
-def _detect_arch() -> str:
-    """检测当前平台架构，返回 'amd64' 或 'arm64'"""
-    machine = platform.machine().lower()
-    if machine in ("amd64", "x86_64", "x64"):
-        return "amd64"
-    elif machine in ("arm64", "aarch64"):
-        return "arm64"
-    else:
-        logger.warning("Unknown architecture '%s', defaulting to amd64", machine)
-        return "amd64"
-
-
-CURRENT_ARCH = _detect_arch()
-ASSET_NAME = f"MyTypeless-{CURRENT_ARCH}.exe"
+ASSET_NAME = "MyTypeless.exe"
 
 
 # ── 数据结构 ──────────────────────────────────────────────────────────────

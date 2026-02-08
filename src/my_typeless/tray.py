@@ -13,9 +13,9 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QIcon, QAction, QFont, QPixmap, QPainter
 from PyQt6.QtSvg import QSvgRenderer
 
-from .config import AppConfig
-from .llm_client import LLMClient
-from .history import load_history, add_history, clear_history
+from my_typeless.config import AppConfig
+from my_typeless.llm_client import LLMClient
+from my_typeless.history import load_history, add_history, clear_history
 
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
@@ -959,7 +959,7 @@ class SettingsWindow(QMainWindow):
             return
 
         # 读取当前表单中的配置（可能尚未保存）
-        from .config import LLMConfig, AppConfig
+        from my_typeless.config import LLMConfig, AppConfig
         llm_config = LLMConfig(
             base_url=self._llm_url.text().strip() or self._config.llm.base_url,
             api_key=self._llm_key.text().strip() or self._config.llm.api_key,

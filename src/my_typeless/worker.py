@@ -4,12 +4,12 @@ import logging
 import threading
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from .config import AppConfig
-from .recorder import Recorder
-from .stt_client import STTClient
-from .llm_client import LLMClient
-from .text_injector import inject_text
-from .history import add_history
+from my_typeless.config import AppConfig
+from my_typeless.recorder import Recorder
+from my_typeless.stt_client import STTClient
+from my_typeless.llm_client import LLMClient
+from my_typeless.text_injector import inject_text
+from my_typeless.history import add_history
 
 logger = logging.getLogger(__name__)
 

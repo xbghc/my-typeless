@@ -6,11 +6,11 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QIcon
 
-from .config import AppConfig
-from .hotkey import HotkeyListener
-from .worker import Worker
-from .tray import TrayIcon, SettingsWindow
-from .updater import UpdateChecker, apply_update, prompt_and_apply_update
+from my_typeless.config import AppConfig
+from my_typeless.hotkey import HotkeyListener
+from my_typeless.worker import Worker
+from my_typeless.tray import TrayIcon, SettingsWindow
+from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
 
 
 class MyTypelessApp:
