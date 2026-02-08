@@ -74,9 +74,14 @@ jobs:
           Get-ChildItem -Recurse $paPath | Select-Object FullName
 
       - name: Install dependencies
+        shell: pwsh
         run: |
-          pip install --upgrade pip
+          pip install --upgrade pip setuptools wheel
           pip install pyinstaller
+          if ("${{ matrix.arch }}" -eq "arm64") {
+            # ARM64: pyaudio 需要禁用 build isolation 以正确传递 PORTAUDIO_PATH
+            pip install --no-build-isolation pyaudio
+          }
           pip install .
 
       - name: Update version in source
