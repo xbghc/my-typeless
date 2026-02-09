@@ -85,28 +85,8 @@ class MyTypelessApp:
         self._settings_window.show()
         self._settings_window.raise_()
         self._settings_window.activateWindow()
-        self._force_foreground(self._settings_window)
-
-    @staticmethod
-    def _force_foreground(window) -> None:
-        """通过 Win32 API 强制将窗口置于前台（绕过 Windows 前台窗口限制）"""
-        user32 = ctypes.windll.user32
-        # 64 位 Windows 下必须声明参数类型，否则 HWND 会被截断导致崩溃
-        user32.GetForegroundWindow.restype = ctypes.c_void_p
-        user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-        user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
-        user32.AttachThreadInput.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_bool]
-
-        hwnd = int(window.winId())
-        foreground_tid = user32.GetWindowThreadProcessId(
-            user32.GetForegroundWindow(), None
-        )
-        current_tid = user32.GetCurrentThreadId()
-        if foreground_tid != current_tid:
-            user32.AttachThreadInput(foreground_tid, current_tid, True)
-        user32.SetForegroundWindow(hwnd)
-        if foreground_tid != current_tid:
-            user32.AttachThreadInput(foreground_tid, current_tid, False)
+        # 由第二个实例授权后，直接调用 SetForegroundWindow 即可生效
+        ctypes.windll.user32.SetForegroundWindow(int(self._settings_window.winId()))
 
     def _on_settings_saved(self, config: AppConfig) -> None:
         """设置保存后更新各组件"""
@@ -154,6 +134,8 @@ def main():
     socket = QLocalSocket()
     socket.connectToServer(_SERVER_NAME)
     if socket.waitForConnected(500):
+        # 第二个实例是用户刚点击的前台进程，有权授权其他进程设置前台窗口
+        ctypes.windll.user32.AllowSetForegroundWindow(0xFFFFFFFF)  # ASFW_ANY
         socket.disconnectFromServer()
         sys.exit(0)
 
