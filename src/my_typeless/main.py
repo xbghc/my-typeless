@@ -1,16 +1,20 @@
 """My Typeless - AI 智能语音输入法入口"""
 
+import ctypes
 import sys
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QIcon
+from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 
 from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
 from my_typeless.worker import Worker
 from my_typeless.tray import TrayIcon, SettingsWindow
 from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
+
+_SERVER_NAME = "MyTypeless_SingleInstance"
 
 
 class MyTypelessApp:
@@ -20,6 +24,12 @@ class MyTypelessApp:
         self._app = QApplication(sys.argv)
         self._app.setQuitOnLastWindowClosed(False)
         self._app.setApplicationName("My Typeless")
+
+        # 单实例服务器：监听来自新启动实例的连接
+        self._server = QLocalServer()
+        self._server.newConnection.connect(self._on_new_connection)
+        QLocalServer.removeServer(_SERVER_NAME)
+        self._server.listen(_SERVER_NAME)
 
         # 设置应用图标
         icon_path = Path(__file__).parent / "resources" / "app_icon.ico"
@@ -57,6 +67,13 @@ class MyTypelessApp:
         self._tray.show_settings.connect(self._open_settings)
         self._tray.quit_app.connect(self._quit)
 
+    def _on_new_connection(self) -> None:
+        """收到其他实例的连接，打开设置窗口"""
+        conn = self._server.nextPendingConnection()
+        if conn:
+            conn.close()
+            self._open_settings()
+
     def _open_settings(self) -> None:
         """打开设置窗口"""
         if self._settings_window is None:
@@ -68,6 +85,8 @@ class MyTypelessApp:
         self._settings_window.show()
         self._settings_window.raise_()
         self._settings_window.activateWindow()
+        # 由第二个实例授权后，直接调用 SetForegroundWindow 即可生效
+        ctypes.windll.user32.SetForegroundWindow(int(self._settings_window.winId()))
 
     def _on_settings_saved(self, config: AppConfig) -> None:
         """设置保存后更新各组件"""
@@ -98,6 +117,7 @@ class MyTypelessApp:
         self._updater.stop()
         self._hotkey.stop()
         self._worker.cleanup()
+        self._server.close()
         self._tray.hide()
         self._app.quit()
 
@@ -110,6 +130,15 @@ class MyTypelessApp:
 
 
 def main():
+    # 尝试连接已运行的实例
+    socket = QLocalSocket()
+    socket.connectToServer(_SERVER_NAME)
+    if socket.waitForConnected(500):
+        # 第二个实例是用户刚点击的前台进程，有权授权其他进程设置前台窗口
+        ctypes.windll.user32.AllowSetForegroundWindow(0xFFFFFFFF)  # ASFW_ANY
+        socket.disconnectFromServer()
+        sys.exit(0)
+
     app = MyTypelessApp()
     sys.exit(app.run())
 
