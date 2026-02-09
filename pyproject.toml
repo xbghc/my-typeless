@@ -1,6 +1,6 @@
 [project]
 name = "my-typeless"
-version = "1.0.0"
+version = "1.0.3"
 description = "AI-powered voice dictation for Windows"
 requires-python = ">=3.13"
 dependencies = [

@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from datetime import datetime
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from my_typeless.config import AppConfig
@@ -30,10 +31,13 @@ class Worker(QObject):
     result_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
+    _TIME_FMT = "%H:%M:%S.%f"
+
     def __init__(self, config: AppConfig):
         super().__init__()
         self._config = config
         self._recorder = Recorder()
+        self._key_press_at: str = ""
 
     def update_config(self, config: AppConfig) -> None:
         """更新配置（在非录音状态下调用）"""
@@ -42,12 +46,14 @@ class Worker(QObject):
     def start_recording(self) -> None:
         """开始录音"""
         logger.debug("start_recording called")
+        self._key_press_at = datetime.now().strftime(self._TIME_FMT)
         self.state_changed.emit("recording")
         self._recorder.start()
 
     def stop_recording_and_process(self) -> None:
         """停止录音并在新线程中启动处理流程"""
         logger.debug("stop_recording_and_process called")
+        key_release_at = datetime.now().strftime(self._TIME_FMT)
         audio_data = self._recorder.stop()
         if not audio_data:
             logger.debug("No audio data recorded")
@@ -59,11 +65,13 @@ class Worker(QObject):
 
         # 每次用新的 daemon 线程处理 API 调用
         t = threading.Thread(
-            target=self._process, args=(audio_data,), daemon=True
+            target=self._process,
+            args=(audio_data, self._key_press_at, key_release_at),
+            daemon=True,
         )
         t.start()
 
-    def _process(self, audio_data: bytes) -> None:
+    def _process(self, audio_data: bytes, key_press_at: str, key_release_at: str) -> None:
         """在后台线程中执行：STT → LLM → 注入文本"""
         try:
             # 1. 语音转文字
@@ -71,6 +79,7 @@ class Worker(QObject):
             stt = STTClient(self._config.stt)
             stt_prompt = self._config.build_stt_prompt()
             raw_text = stt.transcribe(audio_data, prompt=stt_prompt)
+            stt_done_at = datetime.now().strftime(self._TIME_FMT)
             logger.debug("STT result: %r", raw_text)
 
             if not raw_text or not raw_text.strip():
@@ -83,6 +92,7 @@ class Worker(QObject):
             llm = LLMClient(self._config.llm)
             system_prompt = self._config.build_llm_system_prompt()
             refined_text = llm.refine(raw_text, system_prompt=system_prompt)
+            llm_done_at = datetime.now().strftime(self._TIME_FMT)
             logger.debug("LLM result: %r", refined_text)
 
             # 3. 注入文本
@@ -91,7 +101,13 @@ class Worker(QObject):
             logger.debug("Text injected successfully")
 
             # 4. 记录历史
-            add_history(raw_text, refined_text)
+            add_history(
+                raw_text, refined_text,
+                key_press_at=key_press_at,
+                key_release_at=key_release_at,
+                stt_done_at=stt_done_at,
+                llm_done_at=llm_done_at,
+            )
 
             self.result_ready.emit(refined_text)
 
