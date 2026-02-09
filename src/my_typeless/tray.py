@@ -15,7 +15,7 @@ from PyQt6.QtSvg import QSvgRenderer
 
 from my_typeless.config import AppConfig
 from my_typeless.llm_client import LLMClient
-from my_typeless.history import load_history, add_history, clear_history
+from my_typeless.history import HistoryEntry, load_history, add_history, clear_history
 
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
@@ -814,13 +814,29 @@ class SettingsWindow(QMainWindow):
             return
 
         for entry in entries:
-            card = self._make_history_card(entry.timestamp, entry.raw_input, entry.refined_output)
+            card = self._make_history_card(entry)
             self._history_layout.addWidget(card)
 
         self._history_layout.addStretch()
 
-    def _make_history_card(self, timestamp: str, raw_input: str, refined_output: str) -> QWidget:
-        """创建单条历史记录卡片 (Stitch 设计 v2)"""
+    @staticmethod
+    def _calc_duration(t_start: str | None, t_end: str | None) -> str | None:
+        """从两个 HH:MM:SS.ffffff 时间字符串计算耗时，返回可读文本"""
+        if not t_start or not t_end:
+            return None
+        try:
+            from datetime import datetime as _dt
+            fmt = "%H:%M:%S.%f"
+            delta = _dt.strptime(t_end, fmt) - _dt.strptime(t_start, fmt)
+            ms = int(delta.total_seconds() * 1000)
+            if ms < 1000:
+                return f"{ms}ms"
+            return f"{ms / 1000:.1f}s"
+        except (ValueError, TypeError):
+            return None
+
+    def _make_history_card(self, entry: HistoryEntry) -> QWidget:
+        """创建单条历史记录卡片（极简模式 + 可展开详情）"""
         card = QWidget()
         card.setObjectName("hCard")
         card.setStyleSheet("""
@@ -834,18 +850,17 @@ class SettingsWindow(QMainWindow):
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
-        # ── Header row: timestamp + copy ──
+        # ── Header row: timestamp + actions ──
         header = QWidget()
         header.setStyleSheet("border: none;")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 10, 16, 10)
 
-        ts_label = QLabel(timestamp)
+        ts_label = QLabel(entry.timestamp)
         ts_label.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 500;")
         header_layout.addWidget(ts_label)
         header_layout.addStretch()
 
-        # Action link style
         _action_link_ss = """
             QPushButton {
                 border: none; background: transparent;
@@ -857,14 +872,14 @@ class SettingsWindow(QMainWindow):
         retest_btn = QPushButton("🧪 Playground")
         retest_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         retest_btn.setStyleSheet(_action_link_ss)
-        retest_btn.clicked.connect(lambda _checked=False, txt=raw_input: self._retest_with(txt))
+        retest_btn.clicked.connect(lambda _checked=False, txt=entry.raw_input: self._retest_with(txt))
         header_layout.addWidget(retest_btn)
 
         copy_btn = QPushButton("📋 Copy")
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_btn.setStyleSheet(_action_link_ss)
-        output_text = refined_output
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(output_text))
+        _output = entry.refined_output
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(_output))
         header_layout.addWidget(copy_btn)
         card_layout.addWidget(header)
 
@@ -874,56 +889,86 @@ class SettingsWindow(QMainWindow):
         divider.setStyleSheet("background: #f3f4f6; border: none;")
         card_layout.addWidget(divider)
 
-        # ── Content body ──
+        # ── Refined output (always visible) ──
         body = QWidget()
         body.setStyleSheet("border: none;")
         body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(16, 12, 16, 12)
-        body_layout.setSpacing(12)
+        body_layout.setContentsMargins(16, 12, 16, 0)
+        body_layout.setSpacing(0)
 
-        # Input section
-        input_label = QLabel("INPUT")
-        input_label.setStyleSheet(
-            "color: #9ca3af; font-size: 11px; font-weight: 700;"
-            "letter-spacing: 0.5px;"
-        )
-        body_layout.addWidget(input_label)
-
-        input_text = QLabel(raw_input)
-        input_text.setStyleSheet("color: #1a1a1a; font-size: 13px;")
-        input_text.setWordWrap(True)
-        input_text.setMaximumHeight(52)
-        body_layout.addWidget(input_text)
-
-        # Output section (blue left border accent)
-        output_label = QLabel("OUTPUT")
-        output_label.setStyleSheet(
-            "color: #9ca3af; font-size: 11px; font-weight: 700;"
-            "letter-spacing: 0.5px;"
-        )
-        body_layout.addWidget(output_label)
-
-        output_box = QWidget()
-        output_box.setObjectName("hOut")
-        output_box.setStyleSheet("""
-            QWidget#hOut {
-                background: #f9fafb;
-                border-left: 3px solid #2b8cee;
-                border-radius: 0px 6px 6px 0px;
-            }
-        """)
-        out_inner = QVBoxLayout(output_box)
-        out_inner.setContentsMargins(12, 8, 12, 8)
-
-        out_text = QLabel(refined_output)
-        out_text.setStyleSheet("color: #1a1a1a; font-size: 13px; border: none;")
+        out_text = QLabel(entry.refined_output)
+        out_text.setStyleSheet("color: #1a1a1a; font-size: 13px;")
         out_text.setWordWrap(True)
-        out_text.setMaximumHeight(52)
-        out_inner.addWidget(out_text)
-
-        body_layout.addWidget(output_box)
-
+        body_layout.addWidget(out_text)
         card_layout.addWidget(body)
+
+        # ── Expandable detail section ──
+        detail_widget = QWidget()
+        detail_widget.setStyleSheet("border: none;")
+        detail_widget.setVisible(False)
+        detail_layout = QVBoxLayout(detail_widget)
+        detail_layout.setContentsMargins(16, 10, 16, 4)
+        detail_layout.setSpacing(8)
+
+        # 原始转录
+        raw_label = QLabel("原始转录")
+        raw_label.setStyleSheet(
+            "color: #9ca3af; font-size: 11px; font-weight: 700;"
+            "letter-spacing: 0.5px;"
+        )
+        detail_layout.addWidget(raw_label)
+
+        raw_text = QLabel(entry.raw_input)
+        raw_text.setStyleSheet(
+            "color: #6b7280; font-size: 13px;"
+            "background: #f9fafb; border-radius: 4px; padding: 8px;"
+        )
+        raw_text.setWordWrap(True)
+        detail_layout.addWidget(raw_text)
+
+        # 耗时指标
+        stt_dur = self._calc_duration(entry.key_release_at, entry.stt_done_at)
+        llm_dur = self._calc_duration(entry.stt_done_at, entry.llm_done_at)
+        if stt_dur or llm_dur:
+            metrics_layout = QHBoxLayout()
+            metrics_layout.setSpacing(16)
+            _metric_ss = "color: #9ca3af; font-size: 11px; font-weight: 500; border: none;"
+            if stt_dur:
+                metrics_layout.addWidget(QLabel(f"转录耗时 {stt_dur}"))
+                metrics_layout.itemAt(metrics_layout.count() - 1).widget().setStyleSheet(_metric_ss)
+            if llm_dur:
+                metrics_layout.addWidget(QLabel(f"润色耗时 {llm_dur}"))
+                metrics_layout.itemAt(metrics_layout.count() - 1).widget().setStyleSheet(_metric_ss)
+            metrics_layout.addStretch()
+            detail_layout.addLayout(metrics_layout)
+
+        card_layout.addWidget(detail_widget)
+
+        # ── Toggle button ──
+        toggle_row = QWidget()
+        toggle_row.setStyleSheet("border: none;")
+        toggle_layout = QHBoxLayout(toggle_row)
+        toggle_layout.setContentsMargins(16, 4, 16, 8)
+        toggle_layout.addStretch()
+
+        toggle_btn = QPushButton("▸ Details")
+        toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        toggle_btn.setStyleSheet("""
+            QPushButton {
+                border: none; background: transparent;
+                color: #9ca3af; font-size: 11px; font-weight: 600;
+            }
+            QPushButton:hover { color: #6b7280; }
+        """)
+
+        def _toggle():
+            showing = not detail_widget.isVisible()
+            detail_widget.setVisible(showing)
+            toggle_btn.setText("▾ Details" if showing else "▸ Details")
+
+        toggle_btn.clicked.connect(_toggle)
+        toggle_layout.addWidget(toggle_btn)
+        card_layout.addWidget(toggle_row)
 
         return card
 
