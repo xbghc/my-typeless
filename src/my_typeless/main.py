@@ -1,8 +1,9 @@
 """My Typeless - AI 智能语音输入法入口"""
 
+import ctypes
 import sys
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QIcon
 
@@ -11,6 +12,20 @@ from my_typeless.hotkey import HotkeyListener
 from my_typeless.worker import Worker
 from my_typeless.tray import TrayIcon, SettingsWindow
 from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
+
+_ERROR_ALREADY_EXISTS = 0xB7
+
+
+def _acquire_single_instance_mutex():
+    """通过 Windows 命名互斥量确保只有一个实例运行。
+
+    返回互斥量句柄（首个实例）或 None（已有实例运行）。
+    """
+    handle = ctypes.windll.kernel32.CreateMutexW(None, False, "MyTypeless_SingleInstance")
+    if ctypes.windll.kernel32.GetLastError() == _ERROR_ALREADY_EXISTS:
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return None
+    return handle
 
 
 class MyTypelessApp:
@@ -110,6 +125,12 @@ class MyTypelessApp:
 
 
 def main():
+    mutex = _acquire_single_instance_mutex()
+    if mutex is None:
+        app = QApplication(sys.argv)
+        QMessageBox.warning(None, "My Typeless", "My Typeless 已在运行中。")
+        sys.exit(0)
+
     app = MyTypelessApp()
     sys.exit(app.run())
 
