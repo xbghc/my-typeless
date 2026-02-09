@@ -944,23 +944,22 @@ class SettingsWindow(QMainWindow):
         raw_text.setWordWrap(True)
         detail_layout.addWidget(raw_text)
 
-        # 耗时指标
+        # 底部行：耗时指标（左） + Playground（右）
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(16)
+        _metric_ss = "color: #9ca3af; font-size: 11px; font-weight: 500; border: none;"
         stt_dur = self._calc_duration(entry.key_release_at, entry.stt_done_at)
         llm_dur = self._calc_duration(entry.stt_done_at, entry.llm_done_at)
-        if stt_dur or llm_dur:
-            metrics_layout = QHBoxLayout()
-            metrics_layout.setSpacing(16)
-            _metric_ss = "color: #9ca3af; font-size: 11px; font-weight: 500; border: none;"
-            if stt_dur:
-                metrics_layout.addWidget(QLabel(f"转录耗时 {stt_dur}"))
-                metrics_layout.itemAt(metrics_layout.count() - 1).widget().setStyleSheet(_metric_ss)
-            if llm_dur:
-                metrics_layout.addWidget(QLabel(f"润色耗时 {llm_dur}"))
-                metrics_layout.itemAt(metrics_layout.count() - 1).widget().setStyleSheet(_metric_ss)
-            metrics_layout.addStretch()
-            detail_layout.addLayout(metrics_layout)
+        if stt_dur:
+            lbl = QLabel(f"转录耗时 {stt_dur}")
+            lbl.setStyleSheet(_metric_ss)
+            bottom_row.addWidget(lbl)
+        if llm_dur:
+            lbl = QLabel(f"润色耗时 {llm_dur}")
+            lbl.setStyleSheet(_metric_ss)
+            bottom_row.addWidget(lbl)
+        bottom_row.addStretch()
 
-        # Playground 按钮
         _action_link_ss = """
             QPushButton {
                 border: none; background: transparent;
@@ -972,7 +971,8 @@ class SettingsWindow(QMainWindow):
         retest_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         retest_btn.setStyleSheet(_action_link_ss)
         retest_btn.clicked.connect(lambda _checked=False, txt=entry.raw_input: self._retest_with(txt))
-        detail_layout.addWidget(retest_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        bottom_row.addWidget(retest_btn)
+        detail_layout.addLayout(bottom_row)
 
         card_layout.addWidget(detail_widget)
 
