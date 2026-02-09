@@ -889,17 +889,29 @@ class SettingsWindow(QMainWindow):
         divider.setStyleSheet("background: #f3f4f6; border: none;")
         card_layout.addWidget(divider)
 
-        # ── Refined output (always visible) ──
+        # ── Refined output + toggle button (same row) ──
         body = QWidget()
         body.setStyleSheet("border: none;")
-        body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(16, 12, 16, 0)
-        body_layout.setSpacing(0)
+        body_row = QHBoxLayout(body)
+        body_row.setContentsMargins(16, 12, 16, 8)
+        body_row.setSpacing(8)
 
         out_text = QLabel(entry.refined_output)
         out_text.setStyleSheet("color: #1a1a1a; font-size: 13px;")
         out_text.setWordWrap(True)
-        body_layout.addWidget(out_text)
+        body_row.addWidget(out_text, 1)
+
+        toggle_btn = QPushButton("▸")
+        toggle_btn.setFixedSize(24, 24)
+        toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        toggle_btn.setStyleSheet("""
+            QPushButton {
+                border: none; background: transparent;
+                color: #9ca3af; font-size: 13px; font-weight: 600;
+            }
+            QPushButton:hover { color: #6b7280; }
+        """)
+        body_row.addWidget(toggle_btn, 0, Qt.AlignmentFlag.AlignTop)
         card_layout.addWidget(body)
 
         # ── Expandable detail section ──
@@ -944,31 +956,12 @@ class SettingsWindow(QMainWindow):
 
         card_layout.addWidget(detail_widget)
 
-        # ── Toggle button ──
-        toggle_row = QWidget()
-        toggle_row.setStyleSheet("border: none;")
-        toggle_layout = QHBoxLayout(toggle_row)
-        toggle_layout.setContentsMargins(16, 4, 16, 8)
-        toggle_layout.addStretch()
-
-        toggle_btn = QPushButton("▸ Details")
-        toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        toggle_btn.setStyleSheet("""
-            QPushButton {
-                border: none; background: transparent;
-                color: #9ca3af; font-size: 11px; font-weight: 600;
-            }
-            QPushButton:hover { color: #6b7280; }
-        """)
-
         def _toggle():
             showing = not detail_widget.isVisible()
             detail_widget.setVisible(showing)
-            toggle_btn.setText("▾ Details" if showing else "▸ Details")
+            toggle_btn.setText("▾" if showing else "▸")
 
         toggle_btn.clicked.connect(_toggle)
-        toggle_layout.addWidget(toggle_btn)
-        card_layout.addWidget(toggle_row)
 
         return card
 
