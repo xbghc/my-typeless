@@ -3,7 +3,7 @@
 ; 版本号由 CI 通过 /D 参数传入
 
 #ifndef APP_VERSION
-  #define APP_VERSION "1.0.0"
+  #define APP_VERSION "1.0.3"
 #endif
 
 [Setup]

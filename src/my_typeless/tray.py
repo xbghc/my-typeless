@@ -19,7 +19,7 @@ from my_typeless.history import HistoryEntry, load_history, add_history, clear_h
 
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.0.3"
 
 
 def _load_svg_icon(filename: str, size: int = 64) -> QIcon:
