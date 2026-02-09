@@ -161,7 +161,7 @@ class SettingsWindow(QMainWindow):
 
     def _init_ui(self) -> None:
         self.setWindowTitle("Settings")
-        self.setFixedSize(700, 500)  # Stitch: 700x500
+        self.setFixedSize(820, 540)
         self.setWindowFlags(
             Qt.WindowType.Window
             | Qt.WindowType.WindowCloseButtonHint
@@ -242,7 +242,7 @@ class SettingsWindow(QMainWindow):
         content_widget = QWidget()
         content_widget.setStyleSheet("background: #ffffff;")
         right_content = QVBoxLayout(content_widget)
-        right_content.setContentsMargins(32, 32, 32, 16)
+        right_content.setContentsMargins(24, 28, 24, 16)
 
         self._stack = QStackedWidget()
         self._stack.addWidget(self._create_general_page())    # 0
