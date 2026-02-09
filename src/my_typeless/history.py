@@ -16,26 +16,29 @@ class HistoryEntry:
     timestamp: str
     raw_input: str
     refined_output: str
-    voice_duration_ms: Optional[int] = field(default=None)
-    stt_duration_ms: Optional[int] = field(default=None)
-    llm_duration_ms: Optional[int] = field(default=None)
+    key_press_at: Optional[str] = field(default=None)
+    key_release_at: Optional[str] = field(default=None)
+    stt_done_at: Optional[str] = field(default=None)
+    llm_done_at: Optional[str] = field(default=None)
 
     @staticmethod
     def now(
         raw_input: str,
         refined_output: str,
         *,
-        voice_duration_ms: Optional[int] = None,
-        stt_duration_ms: Optional[int] = None,
-        llm_duration_ms: Optional[int] = None,
+        key_press_at: Optional[str] = None,
+        key_release_at: Optional[str] = None,
+        stt_done_at: Optional[str] = None,
+        llm_done_at: Optional[str] = None,
     ) -> "HistoryEntry":
         return HistoryEntry(
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M"),
             raw_input=raw_input,
             refined_output=refined_output,
-            voice_duration_ms=voice_duration_ms,
-            stt_duration_ms=stt_duration_ms,
-            llm_duration_ms=llm_duration_ms,
+            key_press_at=key_press_at,
+            key_release_at=key_release_at,
+            stt_done_at=stt_done_at,
+            llm_done_at=llm_done_at,
         )
 
 
@@ -51,9 +54,10 @@ def load_history() -> List[HistoryEntry]:
                 timestamp=e["timestamp"],
                 raw_input=e["raw_input"],
                 refined_output=e["refined_output"],
-                voice_duration_ms=e.get("voice_duration_ms"),
-                stt_duration_ms=e.get("stt_duration_ms"),
-                llm_duration_ms=e.get("llm_duration_ms"),
+                key_press_at=e.get("key_press_at"),
+                key_release_at=e.get("key_release_at"),
+                stt_done_at=e.get("stt_done_at"),
+                llm_done_at=e.get("llm_done_at"),
             ))
         return entries
     except (json.JSONDecodeError, TypeError, KeyError):
@@ -71,17 +75,19 @@ def add_history(
     raw_input: str,
     refined_output: str,
     *,
-    voice_duration_ms: Optional[int] = None,
-    stt_duration_ms: Optional[int] = None,
-    llm_duration_ms: Optional[int] = None,
+    key_press_at: Optional[str] = None,
+    key_release_at: Optional[str] = None,
+    stt_done_at: Optional[str] = None,
+    llm_done_at: Optional[str] = None,
 ) -> None:
     """新增一条历史记录（最新在前）"""
     entries = load_history()
     entries.insert(0, HistoryEntry.now(
         raw_input, refined_output,
-        voice_duration_ms=voice_duration_ms,
-        stt_duration_ms=stt_duration_ms,
-        llm_duration_ms=llm_duration_ms,
+        key_press_at=key_press_at,
+        key_release_at=key_release_at,
+        stt_done_at=stt_done_at,
+        llm_done_at=llm_done_at,
     ))
     save_history(entries)
 
