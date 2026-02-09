@@ -850,7 +850,7 @@ class SettingsWindow(QMainWindow):
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
-        # ── Header row: timestamp + actions ──
+        # ── Header row: timestamp only ──
         header = QWidget()
         header.setStyleSheet("border: none;")
         header_layout = QHBoxLayout(header)
@@ -860,27 +860,6 @@ class SettingsWindow(QMainWindow):
         ts_label.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 500;")
         header_layout.addWidget(ts_label)
         header_layout.addStretch()
-
-        _action_link_ss = """
-            QPushButton {
-                border: none; background: transparent;
-                color: #2b8cee; font-size: 12px; font-weight: 600;
-            }
-            QPushButton:hover { color: #1a7bd9; }
-        """
-
-        retest_btn = QPushButton("🧪 Playground")
-        retest_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        retest_btn.setStyleSheet(_action_link_ss)
-        retest_btn.clicked.connect(lambda _checked=False, txt=entry.raw_input: self._retest_with(txt))
-        header_layout.addWidget(retest_btn)
-
-        copy_btn = QPushButton("📋 Copy")
-        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.setStyleSheet(_action_link_ss)
-        _output = entry.refined_output
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(_output))
-        header_layout.addWidget(copy_btn)
         card_layout.addWidget(header)
 
         # ── Divider ──
@@ -889,28 +868,39 @@ class SettingsWindow(QMainWindow):
         divider.setStyleSheet("background: #f3f4f6; border: none;")
         card_layout.addWidget(divider)
 
-        # ── Refined output + toggle button (same row) ──
+        _small_btn_ss = """
+            QPushButton {
+                border: none; background: transparent;
+                color: #9ca3af; font-size: 13px; font-weight: 600;
+            }
+            QPushButton:hover { color: #6b7280; }
+        """
+
+        # ── Refined output + copy + toggle (same row) ──
         body = QWidget()
         body.setStyleSheet("border: none;")
         body_row = QHBoxLayout(body)
         body_row.setContentsMargins(16, 12, 16, 8)
-        body_row.setSpacing(8)
+        body_row.setSpacing(4)
 
         out_text = QLabel(entry.refined_output)
         out_text.setStyleSheet("color: #1a1a1a; font-size: 13px;")
         out_text.setWordWrap(True)
         body_row.addWidget(out_text, 1)
 
+        copy_btn = QPushButton("📋")
+        copy_btn.setFixedSize(24, 24)
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_btn.setToolTip("Copy")
+        copy_btn.setStyleSheet(_small_btn_ss)
+        _output = entry.refined_output
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(_output))
+        body_row.addWidget(copy_btn, 0, Qt.AlignmentFlag.AlignTop)
+
         toggle_btn = QPushButton("▸")
         toggle_btn.setFixedSize(24, 24)
         toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        toggle_btn.setStyleSheet("""
-            QPushButton {
-                border: none; background: transparent;
-                color: #9ca3af; font-size: 13px; font-weight: 600;
-            }
-            QPushButton:hover { color: #6b7280; }
-        """)
+        toggle_btn.setStyleSheet(_small_btn_ss)
         body_row.addWidget(toggle_btn, 0, Qt.AlignmentFlag.AlignTop)
         card_layout.addWidget(body)
 
@@ -953,6 +943,20 @@ class SettingsWindow(QMainWindow):
                 metrics_layout.itemAt(metrics_layout.count() - 1).widget().setStyleSheet(_metric_ss)
             metrics_layout.addStretch()
             detail_layout.addLayout(metrics_layout)
+
+        # Playground 按钮
+        _action_link_ss = """
+            QPushButton {
+                border: none; background: transparent;
+                color: #2b8cee; font-size: 12px; font-weight: 600;
+            }
+            QPushButton:hover { color: #1a7bd9; }
+        """
+        retest_btn = QPushButton("🧪 Playground")
+        retest_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        retest_btn.setStyleSheet(_action_link_ss)
+        retest_btn.clicked.connect(lambda _checked=False, txt=entry.raw_input: self._retest_with(txt))
+        detail_layout.addWidget(retest_btn, 0, Qt.AlignmentFlag.AlignLeft)
 
         card_layout.addWidget(detail_widget)
 
