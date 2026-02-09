@@ -852,7 +852,8 @@ class SettingsWindow(QMainWindow):
 
         # ── Header row: timestamp only ──
         header = QWidget()
-        header.setStyleSheet("border: none;")
+        header.setObjectName("hHeader")
+        header.setStyleSheet("QWidget#hHeader { border: none; }")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 10, 16, 2)
 
@@ -872,7 +873,8 @@ class SettingsWindow(QMainWindow):
 
         # ── Refined output + copy + toggle (same row) ──
         body = QWidget()
-        body.setStyleSheet("border: none;")
+        body.setObjectName("hBody")
+        body.setStyleSheet("QWidget#hBody { border: none; }")
         body_row = QHBoxLayout(body)
         body_row.setContentsMargins(16, 12, 16, 8)
         body_row.setSpacing(4)
@@ -922,7 +924,8 @@ class SettingsWindow(QMainWindow):
 
         # ── Expandable detail section ──
         detail_widget = QWidget()
-        detail_widget.setStyleSheet("border: none;")
+        detail_widget.setObjectName("hDetail")
+        detail_widget.setStyleSheet("QWidget#hDetail { border: none; }")
         detail_widget.setVisible(False)
         detail_layout = QVBoxLayout(detail_widget)
         detail_layout.setContentsMargins(16, 10, 16, 4)
