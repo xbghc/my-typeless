@@ -91,6 +91,12 @@ class MyTypelessApp:
     def _force_foreground(window) -> None:
         """通过 Win32 API 强制将窗口置于前台（绕过 Windows 前台窗口限制）"""
         user32 = ctypes.windll.user32
+        # 64 位 Windows 下必须声明参数类型，否则 HWND 会被截断导致崩溃
+        user32.GetForegroundWindow.restype = ctypes.c_void_p
+        user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
+        user32.AttachThreadInput.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_bool]
+
         hwnd = int(window.winId())
         foreground_tid = user32.GetWindowThreadProcessId(
             user32.GetForegroundWindow(), None
