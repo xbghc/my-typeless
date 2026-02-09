@@ -1,5 +1,6 @@
 """My Typeless - AI 智能语音输入法入口"""
 
+import ctypes
 import sys
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication
@@ -84,6 +85,22 @@ class MyTypelessApp:
         self._settings_window.show()
         self._settings_window.raise_()
         self._settings_window.activateWindow()
+        self._force_foreground(self._settings_window)
+
+    @staticmethod
+    def _force_foreground(window) -> None:
+        """通过 Win32 API 强制将窗口置于前台（绕过 Windows 前台窗口限制）"""
+        user32 = ctypes.windll.user32
+        hwnd = int(window.winId())
+        foreground_tid = user32.GetWindowThreadProcessId(
+            user32.GetForegroundWindow(), None
+        )
+        current_tid = user32.GetCurrentThreadId()
+        if foreground_tid != current_tid:
+            user32.AttachThreadInput(foreground_tid, current_tid, True)
+        user32.SetForegroundWindow(hwnd)
+        if foreground_tid != current_tid:
+            user32.AttachThreadInput(foreground_tid, current_tid, False)
 
     def _on_settings_saved(self, config: AppConfig) -> None:
         """设置保存后更新各组件"""
