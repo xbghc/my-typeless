@@ -885,7 +885,14 @@ class SettingsWindow(QMainWindow):
 
         out_text = QLabel(entry.refined_output)
         out_text.setStyleSheet("color: #1a1a1a; font-size: 13px;")
-        out_text.setWordWrap(True)
+        out_text.setWordWrap(False)
+        out_text.setTextFormat(Qt.TextFormat.PlainText)
+        # 折叠时：单行 + 省略号
+        _font_metrics = out_text.fontMetrics()
+        _elided = _font_metrics.elidedText(
+            entry.refined_output.replace("\n", " "), Qt.TextElideMode.ElideRight, 400
+        )
+        out_text.setText(_elided)
         body_row.addWidget(out_text, 1)
 
         copy_btn = QPushButton()
@@ -975,10 +982,19 @@ class SettingsWindow(QMainWindow):
 
         card_layout.addWidget(detail_widget)
 
+        _full_text = entry.refined_output
+        _elided_text = _elided
+
         def _toggle():
             showing = not detail_widget.isVisible()
             detail_widget.setVisible(showing)
             toggle_btn.setText("▾" if showing else "▸")
+            if showing:
+                out_text.setWordWrap(True)
+                out_text.setText(_full_text)
+            else:
+                out_text.setWordWrap(False)
+                out_text.setText(_elided_text)
 
         toggle_btn.clicked.connect(_toggle)
 
