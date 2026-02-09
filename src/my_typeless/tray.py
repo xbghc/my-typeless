@@ -854,19 +854,13 @@ class SettingsWindow(QMainWindow):
         header = QWidget()
         header.setStyleSheet("border: none;")
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(16, 10, 16, 10)
+        header_layout.setContentsMargins(16, 10, 16, 2)
 
         ts_label = QLabel(entry.timestamp)
         ts_label.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 500;")
         header_layout.addWidget(ts_label)
         header_layout.addStretch()
         card_layout.addWidget(header)
-
-        # ── Divider ──
-        divider = QWidget()
-        divider.setFixedHeight(1)
-        divider.setStyleSheet("background: #f3f4f6; border: none;")
-        card_layout.addWidget(divider)
 
         _small_btn_ss = """
             QPushButton {
