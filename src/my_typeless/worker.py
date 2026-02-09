@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from my_typeless.config import AppConfig
@@ -34,6 +35,7 @@ class Worker(QObject):
         super().__init__()
         self._config = config
         self._recorder = Recorder()
+        self._recording_start_time: float = 0.0
 
     def update_config(self, config: AppConfig) -> None:
         """更新配置（在非录音状态下调用）"""
@@ -42,36 +44,40 @@ class Worker(QObject):
     def start_recording(self) -> None:
         """开始录音"""
         logger.debug("start_recording called")
+        self._recording_start_time = time.monotonic()
         self.state_changed.emit("recording")
         self._recorder.start()
 
     def stop_recording_and_process(self) -> None:
         """停止录音并在新线程中启动处理流程"""
         logger.debug("stop_recording_and_process called")
+        voice_duration_ms = int((time.monotonic() - self._recording_start_time) * 1000)
         audio_data = self._recorder.stop()
         if not audio_data:
             logger.debug("No audio data recorded")
             self.state_changed.emit("idle")
             return
 
-        logger.debug("Got %d bytes of audio", len(audio_data))
+        logger.debug("Got %d bytes of audio, voice duration %d ms", len(audio_data), voice_duration_ms)
         self.state_changed.emit("processing")
 
         # 每次用新的 daemon 线程处理 API 调用
         t = threading.Thread(
-            target=self._process, args=(audio_data,), daemon=True
+            target=self._process, args=(audio_data, voice_duration_ms), daemon=True
         )
         t.start()
 
-    def _process(self, audio_data: bytes) -> None:
+    def _process(self, audio_data: bytes, voice_duration_ms: int) -> None:
         """在后台线程中执行：STT → LLM → 注入文本"""
         try:
             # 1. 语音转文字
             logger.debug("Starting STT...")
             stt = STTClient(self._config.stt)
             stt_prompt = self._config.build_stt_prompt()
+            t0 = time.monotonic()
             raw_text = stt.transcribe(audio_data, prompt=stt_prompt)
-            logger.debug("STT result: %r", raw_text)
+            stt_duration_ms = int((time.monotonic() - t0) * 1000)
+            logger.debug("STT result: %r (%d ms)", raw_text, stt_duration_ms)
 
             if not raw_text or not raw_text.strip():
                 logger.debug("Empty STT result, skipping")
@@ -82,8 +88,10 @@ class Worker(QObject):
             logger.debug("Starting LLM refinement...")
             llm = LLMClient(self._config.llm)
             system_prompt = self._config.build_llm_system_prompt()
+            t0 = time.monotonic()
             refined_text = llm.refine(raw_text, system_prompt=system_prompt)
-            logger.debug("LLM result: %r", refined_text)
+            llm_duration_ms = int((time.monotonic() - t0) * 1000)
+            logger.debug("LLM result: %r (%d ms)", refined_text, llm_duration_ms)
 
             # 3. 注入文本
             logger.debug("Injecting text...")
@@ -91,7 +99,12 @@ class Worker(QObject):
             logger.debug("Text injected successfully")
 
             # 4. 记录历史
-            add_history(raw_text, refined_text)
+            add_history(
+                raw_text, refined_text,
+                voice_duration_ms=voice_duration_ms,
+                stt_duration_ms=stt_duration_ms,
+                llm_duration_ms=llm_duration_ms,
+            )
 
             self.result_ready.emit(refined_text)
 

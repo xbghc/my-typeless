@@ -15,7 +15,7 @@ from PyQt6.QtSvg import QSvgRenderer
 
 from my_typeless.config import AppConfig
 from my_typeless.llm_client import LLMClient
-from my_typeless.history import load_history, add_history, clear_history
+from my_typeless.history import HistoryEntry, load_history, add_history, clear_history
 
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
@@ -814,13 +814,26 @@ class SettingsWindow(QMainWindow):
             return
 
         for entry in entries:
-            card = self._make_history_card(entry.timestamp, entry.raw_input, entry.refined_output)
+            card = self._make_history_card(entry)
             self._history_layout.addWidget(card)
 
         self._history_layout.addStretch()
 
-    def _make_history_card(self, timestamp: str, raw_input: str, refined_output: str) -> QWidget:
+    @staticmethod
+    def _format_duration(ms: int | None) -> str:
+        """将毫秒格式化为可读字符串"""
+        if ms is None:
+            return "-"
+        if ms < 1000:
+            return f"{ms}ms"
+        return f"{ms / 1000:.1f}s"
+
+    def _make_history_card(self, entry: "HistoryEntry") -> QWidget:
         """创建单条历史记录卡片 (Stitch 设计 v2)"""
+        timestamp = entry.timestamp
+        raw_input = entry.raw_input
+        refined_output = entry.refined_output
+
         card = QWidget()
         card.setObjectName("hCard")
         card.setStyleSheet("""
@@ -834,7 +847,7 @@ class SettingsWindow(QMainWindow):
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
-        # ── Header row: timestamp + copy ──
+        # ── Header row: timestamp + metrics + actions ──
         header = QWidget()
         header.setStyleSheet("border: none;")
         header_layout = QHBoxLayout(header)
@@ -843,6 +856,29 @@ class SettingsWindow(QMainWindow):
         ts_label = QLabel(timestamp)
         ts_label.setStyleSheet("color: #9ca3af; font-size: 12px; font-weight: 500;")
         header_layout.addWidget(ts_label)
+
+        # ── Performance metrics (compact pills) ──
+        has_metrics = any(v is not None for v in (
+            entry.voice_duration_ms, entry.stt_duration_ms, entry.llm_duration_ms,
+        ))
+        if has_metrics:
+            _pill_ss = (
+                "color: #6b7280; font-size: 11px; font-weight: 500;"
+                "background: #f3f4f6; border-radius: 4px; padding: 1px 6px;"
+                "border: none;"
+            )
+            voice_pill = QLabel(f"Voice {self._format_duration(entry.voice_duration_ms)}")
+            voice_pill.setStyleSheet(_pill_ss)
+            header_layout.addWidget(voice_pill)
+
+            stt_pill = QLabel(f"STT {self._format_duration(entry.stt_duration_ms)}")
+            stt_pill.setStyleSheet(_pill_ss)
+            header_layout.addWidget(stt_pill)
+
+            llm_pill = QLabel(f"LLM {self._format_duration(entry.llm_duration_ms)}")
+            llm_pill.setStyleSheet(_pill_ss)
+            header_layout.addWidget(llm_pill)
+
         header_layout.addStretch()
 
         # Action link style
