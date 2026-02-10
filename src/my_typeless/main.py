@@ -108,9 +108,9 @@ class MyTypelessApp:
         prompt_and_apply_update(release, self._updater)
 
     def _on_update_downloaded(self, path: str) -> None:
-        """更新下载完成，执行替换并重启"""
-        from pathlib import Path
-        apply_update(Path(path))
+        """更新下载完成，启动安装程序并干净退出当前实例"""
+        if apply_update(Path(path)):
+            self._quit()
 
     def _quit(self) -> None:
         """退出应用"""

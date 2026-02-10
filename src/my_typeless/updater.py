@@ -11,7 +11,6 @@
 import json
 import logging
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -146,9 +145,10 @@ def download_release(release: ReleaseInfo, dest: Path,
 # ── 更新执行 ──────────────────────────────────────────────────────────────
 def apply_update(setup_exe: Path) -> bool:
     """
-    运行下载的安装程序执行静默升级，然后退出当前进程。
+    运行下载的安装程序执行静默升级。
     Inno Setup 支持 /SILENT 静默安装，/SUPPRESSMSGBOXES 抑制弹窗，
     /CLOSEAPPLICATIONS 自动关闭旧进程。
+    成功启动安装程序后返回 True，由调用方负责退出当前进程。
     """
     if not setup_exe.exists():
         logger.error("Setup file not found: %s", setup_exe)
@@ -159,7 +159,7 @@ def apply_update(setup_exe: Path) -> bool:
             [str(setup_exe), "/SILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS"],
             close_fds=True,
         )
-        sys.exit(0)
+        return True
     except OSError as e:
         logger.error("Failed to launch installer: %s", e)
         return False
