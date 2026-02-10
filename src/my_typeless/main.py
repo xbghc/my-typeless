@@ -10,7 +10,9 @@ from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
 from my_typeless.worker import Worker
-from my_typeless.tray import TrayIcon, SettingsWindow, load_app_icon
+from my_typeless.tray import TrayIcon
+from my_typeless.settings_window import SettingsWindow
+from my_typeless.icons import load_app_icon
 from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
 
 _SERVER_NAME = "MyTypeless_SingleInstance"
