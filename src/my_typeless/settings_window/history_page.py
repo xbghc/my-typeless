@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter
 
 from my_typeless.history import HistoryEntry, load_history, clear_history
+from my_typeless.settings_window.helpers import make_section_header
 
 
 class HistoryPageMixin:
@@ -19,7 +20,7 @@ class HistoryPageMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        layout.addWidget(self._make_section_header(
+        layout.addWidget(make_section_header(
             "History",
             "Review past refinement results to optimize your prompt."
         ))

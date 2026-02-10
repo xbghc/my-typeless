@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt
 
 from my_typeless.llm_client import LLMClient
 from my_typeless.history import add_history
+from my_typeless.settings_window.helpers import make_section_header, make_field_label
 
 
 class TestPageMixin:
@@ -20,14 +21,14 @@ class TestPageMixin:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        layout.addWidget(self._make_section_header(
+        layout.addWidget(make_section_header(
             "Prompt Playground",
             "Test text refinement with current prompt settings. No microphone needed."
         ))
 
         # -- Raw Input --
         input_label_row = QHBoxLayout()
-        input_label = self._make_field_label("Raw Input")
+        input_label = make_field_label("Raw Input")
         input_label_row.addWidget(input_label)
         input_label_row.addStretch()
         input_hint = QLabel("Simulate transcription")
@@ -71,7 +72,7 @@ class TestPageMixin:
 
         # -- Refined Output --
         output_label_row = QHBoxLayout()
-        output_label = self._make_field_label("Refined Output")
+        output_label = make_field_label("Refined Output")
         output_label_row.addWidget(output_label)
         output_label_row.addStretch()
         self._test_copy_btn = QPushButton("📋 Copy")
