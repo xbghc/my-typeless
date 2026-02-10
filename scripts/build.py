@@ -5,6 +5,7 @@
 
 import argparse
 import io
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -31,13 +32,12 @@ def write_version(version: str) -> None:
         f'"""版本管理模块"""\n\n'
         f'__version__ = "{version}"\n\n'
         f"# 语义化版本号分量\n"
-        f'VERSION_TUPLE = tuple(int(x) for x in __version__.split("."))\n',
+        f'VERSION_TUPLE = tuple(int(x) for x in __version__.split("-")[0].split("."))\n',
         encoding="utf-8",
     )
 
     # pyproject.toml
     content = PYPROJECT.read_text(encoding="utf-8")
-    import re
     content = re.sub(
         r'^version\s*=\s*"[^"]*"',
         f'version = "{version}"',
@@ -51,7 +51,8 @@ def write_version(version: str) -> None:
 
 def generate_version_info(version: str) -> None:
     """生成 Windows 版本信息文件"""
-    parts = [int(x) for x in version.split(".")]
+    base_version = re.split(r"[-+]", version, maxsplit=1)[0]
+    parts = [int(x) for x in base_version.split(".")]
     while len(parts) < 4:
         parts.append(0)
     major, minor, patch, build = parts[:4]
@@ -100,8 +101,15 @@ def generate_ico() -> None:
         print(f"[build] SVG not found: {svg_path}, skipping ICO generation")
         return
 
-    import cairosvg
-    from PIL import Image
+    try:
+        import cairosvg
+        from PIL import Image
+    except ImportError:
+        if ico_path.exists():
+            print("[build] cairosvg/Pillow not installed, using existing ICO file")
+            return
+        print("[build] ERROR: cairosvg/Pillow required for ICO generation but not installed", file=sys.stderr)
+        sys.exit(1)
 
     sizes = [16, 24, 32, 48, 64, 128, 256]
     images = []
