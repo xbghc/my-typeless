@@ -90,13 +90,17 @@ class Worker(QObject):
         self._segment_queue.put(wav_data)
 
     def _incremental_process(self, key_press_at: str) -> None:
-        """增量转录消费线程：逐段转录 → 拼接 → LLM 精修 → 注入文本"""
+        """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
             stt = STTClient(self._config.stt)
-            base_prompt = self._config.build_stt_prompt()
-            transcription_parts: list[str] = []
+            llm = LLMClient(self._config.llm)
+            base_stt_prompt = self._config.build_stt_prompt()
+            llm_system_prompt = self._config.build_llm_system_prompt()
 
-            # 持续从队列中取出音频片段并转录
+            transcription_parts: list[str] = []
+            refined_parts: list[str] = []
+
+            # 持续从队列中取出音频片段，逐段完成 STT + LLM
             while True:
                 try:
                     item = self._segment_queue.get(timeout=0.1)
@@ -107,51 +111,58 @@ class Worker(QObject):
                     key_release_at = item[1]
                     break
 
-                # 组合 prompt：术语表 + 前段转录结果（提供上下文连贯性）
+                # STT：术语表 + 前段转录结果作为 prompt
                 if transcription_parts:
                     prev_context = transcription_parts[-1]
-                    prompt = f"{base_prompt} {prev_context}" if base_prompt else prev_context
+                    stt_prompt = f"{base_stt_prompt} {prev_context}" if base_stt_prompt else prev_context
                 else:
-                    prompt = base_prompt
+                    stt_prompt = base_stt_prompt
 
                 logger.debug("Transcribing segment (%d bytes)...", len(item))
-                text = stt.transcribe(item, prompt=prompt)
+                text = stt.transcribe(item, prompt=stt_prompt)
                 logger.debug("Segment STT result: %r", text)
 
-                if text and text.strip():
-                    transcription_parts.append(text)
+                if not text or not text.strip():
+                    continue
 
-            stt_done_at = datetime.now().strftime(self._TIME_FMT)
+                transcription_parts.append(text)
 
-            # 拼接全部转录结果
+                # LLM 精修：将已精修的前文作为上下文
+                llm_context = "".join(refined_parts)
+                logger.debug("Refining segment...")
+                refined = llm.refine(
+                    text,
+                    system_prompt=llm_system_prompt,
+                    context=llm_context,
+                )
+                logger.debug("Segment LLM result: %r", refined)
+                refined_parts.append(refined)
+
+            done_at = datetime.now().strftime(self._TIME_FMT)
+
+            # 拼接全部结果
             raw_text = "".join(transcription_parts)
+            refined_text = "".join(refined_parts)
             logger.debug("Full STT result: %r", raw_text)
+            logger.debug("Full LLM result: %r", refined_text)
 
             if not raw_text.strip():
                 logger.debug("Empty STT result, skipping")
                 self.state_changed.emit("idle")
                 return
 
-            # LLM 精修
-            logger.debug("Starting LLM refinement...")
-            llm = LLMClient(self._config.llm)
-            system_prompt = self._config.build_llm_system_prompt()
-            refined_text = llm.refine(raw_text, system_prompt=system_prompt)
-            llm_done_at = datetime.now().strftime(self._TIME_FMT)
-            logger.debug("LLM result: %r", refined_text)
-
             # 注入文本
             logger.debug("Injecting text...")
             inject_text(refined_text)
             logger.debug("Text injected successfully")
 
-            # 记录历史
+            # 记录历史（增量模式下 STT 和 LLM 交替进行，完成时间相同）
             add_history(
                 raw_text, refined_text,
                 key_press_at=key_press_at,
                 key_release_at=key_release_at,
-                stt_done_at=stt_done_at,
-                llm_done_at=llm_done_at,
+                stt_done_at=done_at,
+                llm_done_at=done_at,
             )
 
             self.result_ready.emit(refined_text)
