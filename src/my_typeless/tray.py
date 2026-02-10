@@ -23,21 +23,32 @@ RESOURCES_DIR = Path(__file__).parent / "resources"
 APP_VERSION = "1.0.3"
 
 
-def load_svg_icon(filename: str, size: int = 64) -> QIcon:
-    """从 SVG 文件加载图标，支持高 DPI 缩放"""
+def load_svg_icon(filename: str, size: int = 64, *, hidpi: bool = True) -> QIcon:
+    """从 SVG 文件加载图标。
+
+    hidpi=True（默认）时生成多倍率 pixmap 以适配高 DPI 窗口图标；
+    hidpi=False 时只生成单一尺寸，适用于系统托盘等由系统管理缩放的场景。
+    """
     svg_path = RESOURCES_DIR / filename
     if not svg_path.exists():
         return QIcon()
     renderer = QSvgRenderer(str(svg_path))
     icon = QIcon()
-    # 根据屏幕实际 DPI 决定最大缩放倍数；拿不到屏幕时默认 2x
-    screen = QApplication.primaryScreen()
-    max_scale = max(1, math.ceil(screen.devicePixelRatio())) if screen else 2
-    for scale in range(1, max_scale + 1):
-        px = size * scale
-        pixmap = QPixmap(px, px)
+    if hidpi:
+        screen = QApplication.primaryScreen()
+        max_scale = max(1, math.ceil(screen.devicePixelRatio())) if screen else 2
+        for scale in range(1, max_scale + 1):
+            px = size * scale
+            pixmap = QPixmap(px, px)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            pixmap.setDevicePixelRatio(scale)
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
+            icon.addPixmap(pixmap)
+    else:
+        pixmap = QPixmap(size, size)
         pixmap.fill(Qt.GlobalColor.transparent)
-        pixmap.setDevicePixelRatio(scale)
         painter = QPainter(pixmap)
         renderer.render(painter)
         painter.end()
@@ -1129,9 +1140,9 @@ class TrayIcon(QSystemTrayIcon):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._icons = {
-            "idle": load_svg_icon("icon_idle.svg"),
-            "recording": load_svg_icon("icon_recording.svg"),
-            "processing": load_svg_icon("icon_processing.svg"),
+            "idle": load_svg_icon("icon_idle.svg", hidpi=False),
+            "recording": load_svg_icon("icon_recording.svg", hidpi=False),
+            "processing": load_svg_icon("icon_processing.svg", hidpi=False),
         }
         self.setIcon(self._icons["idle"])
         self.setToolTip("My Typeless - Ready")
