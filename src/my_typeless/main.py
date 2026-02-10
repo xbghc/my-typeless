@@ -5,13 +5,12 @@ import sys
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QIcon
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 
 from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
 from my_typeless.worker import Worker
-from my_typeless.tray import TrayIcon, SettingsWindow, _load_svg_icon
+from my_typeless.tray import TrayIcon, SettingsWindow, load_app_icon
 from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
 
 _SERVER_NAME = "MyTypeless_SingleInstance"
@@ -31,13 +30,7 @@ class MyTypelessApp:
         QLocalServer.removeServer(_SERVER_NAME)
         self._server.listen(_SERVER_NAME)
 
-        # 设置应用图标（优先使用 SVG 以获得高 DPI 清晰度）
-        svg_path = Path(__file__).parent / "resources" / "app_icon.svg"
-        ico_path = Path(__file__).parent / "resources" / "app_icon.ico"
-        if svg_path.exists():
-            self._app.setWindowIcon(_load_svg_icon("app_icon.svg", size=128))
-        elif ico_path.exists():
-            self._app.setWindowIcon(QIcon(str(ico_path)))
+        self._app.setWindowIcon(load_app_icon())
 
         # 加载配置
         self._config = AppConfig.load()

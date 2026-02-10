@@ -1,5 +1,6 @@
 """系统托盘 + 设置窗口 - 基于 Stitch 设计稿实现"""
 
+import math
 import sys
 import threading
 from pathlib import Path
@@ -22,15 +23,19 @@ RESOURCES_DIR = Path(__file__).parent / "resources"
 APP_VERSION = "1.0.3"
 
 
-def _load_svg_icon(filename: str, size: int = 64) -> QIcon:
+def load_svg_icon(filename: str, size: int = 64) -> QIcon:
     """从 SVG 文件加载图标，支持高 DPI 缩放"""
     svg_path = RESOURCES_DIR / filename
     if not svg_path.exists():
         return QIcon()
     renderer = QSvgRenderer(str(svg_path))
     icon = QIcon()
-    # 生成 1x 和 2x 分辨率，覆盖普通及高 DPI 屏幕
-    for scale in (1, 2):
+    # 根据屏幕实际 DPI 决定最大缩放倍数
+    max_scale = 1
+    screen = QApplication.primaryScreen()
+    if screen:
+        max_scale = max(1, math.ceil(screen.devicePixelRatio()))
+    for scale in range(1, max_scale + 1):
         px = size * scale
         pixmap = QPixmap(px, px)
         pixmap.fill(Qt.GlobalColor.transparent)
@@ -40,6 +45,17 @@ def _load_svg_icon(filename: str, size: int = 64) -> QIcon:
         painter.end()
         icon.addPixmap(pixmap)
     return icon
+
+
+def load_app_icon() -> QIcon:
+    """加载应用图标（优先 SVG，回退 .ico）"""
+    svg_path = RESOURCES_DIR / "app_icon.svg"
+    if svg_path.exists():
+        return load_svg_icon("app_icon.svg", size=128)
+    ico_path = RESOURCES_DIR / "app_icon.ico"
+    if ico_path.exists():
+        return QIcon(str(ico_path))
+    return QIcon()
 
 
 class HotkeyButton(QPushButton):
@@ -172,14 +188,7 @@ class SettingsWindow(QMainWindow):
             Qt.WindowType.Window
             | Qt.WindowType.WindowCloseButtonHint
         )
-        # 设置窗口图标（优先使用 SVG 以获得高 DPI 清晰度）
-        svg_path = RESOURCES_DIR / "app_icon.svg"
-        if svg_path.exists():
-            self.setWindowIcon(_load_svg_icon("app_icon.svg", size=128))
-        else:
-            ico_path = RESOURCES_DIR / "app_icon.ico"
-            if ico_path.exists():
-                self.setWindowIcon(QIcon(str(ico_path)))
+        self.setWindowIcon(load_app_icon())
         # Stitch: font-family Inter, Segoe UI
         self.setStyleSheet("""
             QMainWindow { background: #ffffff; }
@@ -1122,9 +1131,9 @@ class TrayIcon(QSystemTrayIcon):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._icons = {
-            "idle": _load_svg_icon("icon_idle.svg"),
-            "recording": _load_svg_icon("icon_recording.svg"),
-            "processing": _load_svg_icon("icon_processing.svg"),
+            "idle": load_svg_icon("icon_idle.svg"),
+            "recording": load_svg_icon("icon_recording.svg"),
+            "processing": load_svg_icon("icon_processing.svg"),
         }
         self.setIcon(self._icons["idle"])
         self.setToolTip("My Typeless - Ready")
