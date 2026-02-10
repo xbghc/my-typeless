@@ -5,13 +5,12 @@ import sys
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QIcon
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 
 from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
 from my_typeless.worker import Worker
-from my_typeless.tray import TrayIcon, SettingsWindow
+from my_typeless.tray import TrayIcon, SettingsWindow, load_app_icon
 from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
 
 _SERVER_NAME = "MyTypeless_SingleInstance"
@@ -31,10 +30,7 @@ class MyTypelessApp:
         QLocalServer.removeServer(_SERVER_NAME)
         self._server.listen(_SERVER_NAME)
 
-        # 设置应用图标
-        icon_path = Path(__file__).parent / "resources" / "app_icon.ico"
-        if icon_path.exists():
-            self._app.setWindowIcon(QIcon(str(icon_path)))
+        self._app.setWindowIcon(load_app_icon())
 
         # 加载配置
         self._config = AppConfig.load()

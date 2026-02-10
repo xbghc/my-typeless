@@ -1,5 +1,6 @@
 """系统托盘 + 设置窗口 - 基于 Stitch 设计稿实现"""
 
+import math
 import sys
 import threading
 from pathlib import Path
@@ -22,18 +23,48 @@ RESOURCES_DIR = Path(__file__).parent / "resources"
 APP_VERSION = "1.0.3"
 
 
-def _load_svg_icon(filename: str, size: int = 64) -> QIcon:
-    """从 SVG 文件加载图标"""
+def load_svg_icon(filename: str, size: int = 64, *, hidpi: bool = True) -> QIcon:
+    """从 SVG 文件加载图标。
+
+    hidpi=True（默认）时生成多倍率 pixmap 以适配高 DPI 窗口图标；
+    hidpi=False 时只生成单一尺寸，适用于系统托盘等由系统管理缩放的场景。
+    """
     svg_path = RESOURCES_DIR / filename
     if not svg_path.exists():
         return QIcon()
     renderer = QSvgRenderer(str(svg_path))
-    pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    renderer.render(painter)
-    painter.end()
-    return QIcon(pixmap)
+    icon = QIcon()
+    if hidpi:
+        screen = QApplication.primaryScreen()
+        max_scale = max(1, math.ceil(screen.devicePixelRatio())) if screen else 2
+        for scale in range(1, max_scale + 1):
+            px = size * scale
+            pixmap = QPixmap(px, px)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            pixmap.setDevicePixelRatio(scale)
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
+            icon.addPixmap(pixmap)
+    else:
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        icon.addPixmap(pixmap)
+    return icon
+
+
+def load_app_icon() -> QIcon:
+    """加载应用图标（优先 SVG，回退 .ico）"""
+    svg_path = RESOURCES_DIR / "app_icon.svg"
+    if svg_path.exists():
+        return load_svg_icon("app_icon.svg", size=128)
+    ico_path = RESOURCES_DIR / "app_icon.ico"
+    if ico_path.exists():
+        return QIcon(str(ico_path))
+    return QIcon()
 
 
 class HotkeyButton(QPushButton):
@@ -166,10 +197,7 @@ class SettingsWindow(QMainWindow):
             Qt.WindowType.Window
             | Qt.WindowType.WindowCloseButtonHint
         )
-        # 设置窗口图标
-        ico_path = RESOURCES_DIR / "app_icon.ico"
-        if ico_path.exists():
-            self.setWindowIcon(QIcon(str(ico_path)))
+        self.setWindowIcon(load_app_icon())
         # Stitch: font-family Inter, Segoe UI
         self.setStyleSheet("""
             QMainWindow { background: #ffffff; }
@@ -1112,9 +1140,9 @@ class TrayIcon(QSystemTrayIcon):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._icons = {
-            "idle": _load_svg_icon("icon_idle.svg"),
-            "recording": _load_svg_icon("icon_recording.svg"),
-            "processing": _load_svg_icon("icon_processing.svg"),
+            "idle": load_svg_icon("icon_idle.svg", hidpi=False),
+            "recording": load_svg_icon("icon_recording.svg", hidpi=False),
+            "processing": load_svg_icon("icon_processing.svg", hidpi=False),
         }
         self.setIcon(self._icons["idle"])
         self.setToolTip("My Typeless - Ready")
