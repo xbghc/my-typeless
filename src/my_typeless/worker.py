@@ -64,7 +64,7 @@ class Worker(QObject):
         # 启动增量转录消费线程（录音期间即开始转录）
         # 将队列作为参数传入，避免与后续录音会话的队列混淆
         t = threading.Thread(
-            target=self._incremental_process,
+            target=self._run_pipeline,
             args=(self._key_press_at, self._segment_queue),
             daemon=True,
         )
@@ -93,18 +93,32 @@ class Worker(QObject):
         logger.debug("Segment detected: %d bytes", len(wav_data))
         self._segment_queue.put(wav_data)
 
-    def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
-        """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
+    def _run_pipeline(self, key_press_at: str, segment_queue: queue.Queue) -> None:
+        """运行处理流水线：启动 STT 和 LLM 线程进行并行处理"""
+        stt_queue = queue.Queue()
+
+        # 启动 LLM 线程（消费者）
+        llm_thread = threading.Thread(
+            target=self._llm_task,
+            args=(stt_queue, key_press_at),
+            daemon=True
+        )
+        llm_thread.start()
+
+        # 在当前线程运行 STT 任务（生产者）
+        # 当 STT 任务结束时（遇到哨兵），它会将哨兵放入 stt_queue，从而结束 LLM 任务
+        self._stt_task(segment_queue, stt_queue)
+
+        # 等待 LLM 线程结束
+        llm_thread.join()
+
+    def _stt_task(self, segment_queue: queue.Queue, stt_queue: queue.Queue) -> None:
+        """STT 任务：消费音频片段，转录，并推送到 stt_queue"""
         try:
             stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
             base_stt_prompt = self._config.build_stt_prompt()
-            llm_system_prompt = self._config.build_llm_system_prompt()
-
             transcription_parts: list[str] = []
-            refined_parts: list[str] = []
 
-            # 持续从队列中取出音频片段，逐段完成 STT + LLM
             while True:
                 try:
                     item = segment_queue.get(timeout=0.1)
@@ -113,9 +127,11 @@ class Worker(QObject):
 
                 if isinstance(item, tuple) and item[0] is _SENTINEL:
                     key_release_at = item[1]
+                    # 传递哨兵给 LLM 任务
+                    stt_queue.put((_SENTINEL, key_release_at))
                     break
 
-                # STT prompt: 累积转录尾部 + 术语表（Whisper 从前截断，术语放尾部确保保留）
+                # STT prompt: 累积转录尾部 + 术语表
                 if transcription_parts:
                     accumulated = "".join(transcription_parts)
                     if base_stt_prompt:
@@ -134,6 +150,39 @@ class Worker(QObject):
                 if not text or not text.strip():
                     continue
 
+                transcription_parts.append(text)
+                stt_queue.put(text)
+
+        except Exception as e:
+            logger.error("STT task error: %s", e, exc_info=True)
+            # 通知 LLM 任务发生错误
+            stt_queue.put(("ERROR", str(e)))
+
+    def _llm_task(self, stt_queue: queue.Queue, key_press_at: str) -> None:
+        """LLM 任务：消费转录文本，精修，并最终注入"""
+        try:
+            llm = LLMClient(self._config.llm)
+            llm_system_prompt = self._config.build_llm_system_prompt()
+
+            transcription_parts: list[str] = []
+            refined_parts: list[str] = []
+            key_release_at = ""
+
+            while True:
+                try:
+                    item = stt_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+
+                if isinstance(item, tuple):
+                    if item[0] is _SENTINEL:
+                        key_release_at = item[1]
+                        break
+                    elif item[0] == "ERROR":
+                        raise RuntimeError(f"Upstream STT error: {item[1]}")
+
+                # item is raw text
+                text = item
                 transcription_parts.append(text)
 
                 # LLM 精修：将已精修的前文作为上下文
@@ -157,6 +206,7 @@ class Worker(QObject):
 
             if not raw_text.strip():
                 logger.debug("Empty STT result, skipping")
+                # 即使为空也需要发送 idle 状态，因为之前发了 recording/processing
                 self.state_changed.emit("idle")
                 return
 
@@ -165,7 +215,7 @@ class Worker(QObject):
             inject_text(refined_text)
             logger.debug("Text injected successfully")
 
-            # 记录历史（增量模式下 STT 和 LLM 交替进行，完成时间相同）
+            # 记录历史
             add_history(
                 raw_text, refined_text,
                 key_press_at=key_press_at,
@@ -177,7 +227,7 @@ class Worker(QObject):
             self.result_ready.emit(refined_text)
 
         except Exception as e:
-            logger.error("Processing error: %s", e, exc_info=True)
+            logger.error("LLM task error: %s", e, exc_info=True)
             self.error_occurred.emit(str(e))
 
         finally:
