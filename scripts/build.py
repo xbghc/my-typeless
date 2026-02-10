@@ -100,8 +100,15 @@ def generate_ico() -> None:
         print(f"[build] SVG not found: {svg_path}, skipping ICO generation")
         return
 
-    import cairosvg
-    from PIL import Image
+    try:
+        import cairosvg
+        from PIL import Image
+    except ImportError:
+        if ico_path.exists():
+            print("[build] cairosvg/Pillow not installed, using existing ICO file")
+            return
+        print("[build] ERROR: cairosvg/Pillow required for ICO generation but not installed", file=sys.stderr)
+        sys.exit(1)
 
     sizes = [16, 24, 32, 48, 64, 128, 256]
     images = []
