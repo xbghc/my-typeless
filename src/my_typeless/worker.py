@@ -62,9 +62,10 @@ class Worker(QObject):
         self._recorder.start(on_segment=self._on_segment)
 
         # 启动增量转录消费线程（录音期间即开始转录）
+        # 将队列作为参数传入，避免与后续录音会话的队列混淆
         t = threading.Thread(
             target=self._incremental_process,
-            args=(self._key_press_at,),
+            args=(self._key_press_at, self._segment_queue),
             daemon=True,
         )
         t.start()
@@ -92,7 +93,7 @@ class Worker(QObject):
         logger.debug("Segment detected: %d bytes", len(wav_data))
         self._segment_queue.put(wav_data)
 
-    def _incremental_process(self, key_press_at: str) -> None:
+    def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
             stt = STTClient(self._config.stt)
@@ -106,7 +107,7 @@ class Worker(QObject):
             # 持续从队列中取出音频片段，逐段完成 STT + LLM
             while True:
                 try:
-                    item = self._segment_queue.get(timeout=0.1)
+                    item = segment_queue.get(timeout=0.1)
                 except queue.Empty:
                     continue
 
