@@ -31,10 +31,14 @@ class MyTypelessApp:
         QLocalServer.removeServer(_SERVER_NAME)
         self._server.listen(_SERVER_NAME)
 
-        # 设置应用图标
-        icon_path = Path(__file__).parent / "resources" / "app_icon.ico"
-        if icon_path.exists():
-            self._app.setWindowIcon(QIcon(str(icon_path)))
+        # 设置应用图标（优先使用 SVG 以获得高 DPI 清晰度）
+        svg_path = Path(__file__).parent / "resources" / "app_icon.svg"
+        ico_path = Path(__file__).parent / "resources" / "app_icon.ico"
+        if svg_path.exists():
+            from my_typeless.tray import _load_svg_icon
+            self._app.setWindowIcon(_load_svg_icon("app_icon.svg", size=128))
+        elif ico_path.exists():
+            self._app.setWindowIcon(QIcon(str(ico_path)))
 
         # 加载配置
         self._config = AppConfig.load()

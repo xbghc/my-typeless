@@ -23,17 +23,23 @@ APP_VERSION = "1.0.3"
 
 
 def _load_svg_icon(filename: str, size: int = 64) -> QIcon:
-    """从 SVG 文件加载图标"""
+    """从 SVG 文件加载图标，支持高 DPI 缩放"""
     svg_path = RESOURCES_DIR / filename
     if not svg_path.exists():
         return QIcon()
     renderer = QSvgRenderer(str(svg_path))
-    pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    renderer.render(painter)
-    painter.end()
-    return QIcon(pixmap)
+    icon = QIcon()
+    # 生成 1x 和 2x 分辨率，覆盖普通及高 DPI 屏幕
+    for scale in (1, 2):
+        px = size * scale
+        pixmap = QPixmap(px, px)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        pixmap.setDevicePixelRatio(scale)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        icon.addPixmap(pixmap)
+    return icon
 
 
 class HotkeyButton(QPushButton):
@@ -166,10 +172,14 @@ class SettingsWindow(QMainWindow):
             Qt.WindowType.Window
             | Qt.WindowType.WindowCloseButtonHint
         )
-        # 设置窗口图标
-        ico_path = RESOURCES_DIR / "app_icon.ico"
-        if ico_path.exists():
-            self.setWindowIcon(QIcon(str(ico_path)))
+        # 设置窗口图标（优先使用 SVG 以获得高 DPI 清晰度）
+        svg_path = RESOURCES_DIR / "app_icon.svg"
+        if svg_path.exists():
+            self.setWindowIcon(_load_svg_icon("app_icon.svg", size=128))
+        else:
+            ico_path = RESOURCES_DIR / "app_icon.ico"
+            if ico_path.exists():
+                self.setWindowIcon(QIcon(str(ico_path)))
         # Stitch: font-family Inter, Segoe UI
         self.setStyleSheet("""
             QMainWindow { background: #ffffff; }
