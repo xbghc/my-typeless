@@ -30,11 +30,9 @@ def load_svg_icon(filename: str, size: int = 64) -> QIcon:
         return QIcon()
     renderer = QSvgRenderer(str(svg_path))
     icon = QIcon()
-    # 根据屏幕实际 DPI 决定最大缩放倍数
-    max_scale = 1
+    # 根据屏幕实际 DPI 决定最大缩放倍数；拿不到屏幕时默认 2x
     screen = QApplication.primaryScreen()
-    if screen:
-        max_scale = max(1, math.ceil(screen.devicePixelRatio()))
+    max_scale = max(1, math.ceil(screen.devicePixelRatio())) if screen else 2
     for scale in range(1, max_scale + 1):
         px = size * scale
         pixmap = QPixmap(px, px)
