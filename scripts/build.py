@@ -4,6 +4,7 @@
 """
 
 import argparse
+import io
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ VERSION_FILE = ROOT / "src" / "my_typeless" / "version.py"
 PYPROJECT = ROOT / "pyproject.toml"
 SPEC_FILE = ROOT / "my_typeless.spec"
 VERSION_INFO_FILE = ROOT / "file_version_info.txt"
+RESOURCES_DIR = ROOT / "src" / "my_typeless" / "resources"
 
 
 def read_version() -> str:
@@ -90,6 +92,33 @@ VSVersionInfo(
     print(f"[build] Version info file generated: {VERSION_INFO_FILE}")
 
 
+def generate_ico() -> None:
+    """从 app_icon.svg 生成包含多分辨率层的 app_icon.ico"""
+    svg_path = RESOURCES_DIR / "app_icon.svg"
+    ico_path = RESOURCES_DIR / "app_icon.ico"
+    if not svg_path.exists():
+        print(f"[build] SVG not found: {svg_path}, skipping ICO generation")
+        return
+
+    import cairosvg
+    from PIL import Image
+
+    sizes = [16, 24, 32, 48, 64, 128, 256]
+    images = []
+    for size in sizes:
+        png_data = cairosvg.svg2png(url=str(svg_path), output_width=size, output_height=size)
+        images.append(Image.open(io.BytesIO(png_data)).convert("RGBA"))
+
+    # 以最大尺寸为基础保存，附带所有较小尺寸
+    images[-1].save(
+        ico_path,
+        format="ICO",
+        sizes=[(s, s) for s in sizes],
+        append_images=images[:-1],
+    )
+    print(f"[build] ICO generated: {ico_path} ({len(sizes)} sizes)")
+
+
 def run_pyinstaller() -> None:
     """执行 PyInstaller 构建"""
     cmd = [
@@ -127,6 +156,7 @@ def main():
     print(f"[build] Building version {version}")
 
     generate_version_info(version)
+    generate_ico()
 
     if not args.no_build:
         run_pyinstaller()
