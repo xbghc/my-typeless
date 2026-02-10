@@ -11,7 +11,7 @@ from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
 from my_typeless.worker import Worker
-from my_typeless.tray import TrayIcon, SettingsWindow
+from my_typeless.tray import TrayIcon, SettingsWindow, _load_svg_icon
 from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
 
 _SERVER_NAME = "MyTypeless_SingleInstance"
@@ -35,7 +35,6 @@ class MyTypelessApp:
         svg_path = Path(__file__).parent / "resources" / "app_icon.svg"
         ico_path = Path(__file__).parent / "resources" / "app_icon.ico"
         if svg_path.exists():
-            from my_typeless.tray import _load_svg_icon
             self._app.setWindowIcon(_load_svg_icon("app_icon.svg", size=128))
         elif ico_path.exists():
             self._app.setWindowIcon(QIcon(str(ico_path)))
