@@ -50,4 +50,7 @@ Name: "{autodesktop}\My Typeless"; Filename: "{app}\MyTypeless.exe"; Tasks: desk
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MyTypeless"; ValueData: """{app}\MyTypeless.exe"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
+; Interactive install: show launch checkbox on final page
 Filename: "{app}\MyTypeless.exe"; Description: "Launch My Typeless"; Flags: nowait postinstall skipifsilent
+; Silent install (upgrade): always launch the new version
+Filename: "{app}\MyTypeless.exe"; Flags: nowait skipifnotsilent
