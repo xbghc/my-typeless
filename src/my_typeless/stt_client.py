@@ -36,6 +36,8 @@ class STTClient:
         }
         if prompt:
             kwargs["prompt"] = prompt
+        if self._config.language:
+            kwargs["language"] = self._config.language
 
         response = self._client.audio.transcriptions.create(**kwargs)
         return response.text

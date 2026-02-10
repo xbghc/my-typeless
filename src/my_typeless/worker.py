@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 # 队列哨兵值，表示录音结束、不再有新片段
 _SENTINEL = object()
 
+# Whisper prompt 上限约 224 tokens；对中文约 400 字符，取尾部以保留最近上下文
+_MAX_PROMPT_CHARS = 400
+
 
 class Worker(QObject):
     """
@@ -111,10 +114,15 @@ class Worker(QObject):
                     key_release_at = item[1]
                     break
 
-                # STT：术语表 + 前段转录结果作为 prompt
+                # STT prompt: 累积转录尾部 + 术语表（Whisper 从前截断，术语放尾部确保保留）
                 if transcription_parts:
-                    prev_context = transcription_parts[-1]
-                    stt_prompt = f"{base_stt_prompt} {prev_context}" if base_stt_prompt else prev_context
+                    accumulated = "".join(transcription_parts)
+                    if base_stt_prompt:
+                        tail_budget = _MAX_PROMPT_CHARS - len(base_stt_prompt) - 1
+                        tail = accumulated[-tail_budget:] if tail_budget > 0 else ""
+                        stt_prompt = f"{tail} {base_stt_prompt}" if tail else base_stt_prompt
+                    else:
+                        stt_prompt = accumulated[-_MAX_PROMPT_CHARS:]
                 else:
                     stt_prompt = base_stt_prompt
 

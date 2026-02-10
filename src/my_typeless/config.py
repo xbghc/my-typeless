@@ -41,6 +41,7 @@ class STTConfig:
     base_url: str = "https://api.groq.com/openai/v1"
     api_key: str = ""
     model: str = "whisper-large-v3"
+    language: str = ""  # 语言代码（如 "zh"），留空则自动检测
 
 
 @dataclass
@@ -66,10 +67,14 @@ class AppConfig:
         return "\n\n".join(parts)
 
     def build_stt_prompt(self) -> str:
-        """组装 STT prompt（术语列表，帮助 Whisper 正确识别专有名词）"""
+        """组装 STT prompt（术语列表，帮助 Whisper 正确识别专有名词）
+
+        Whisper 将 prompt 视为"此前已转录的文本"，用中文顿号连接术语
+        使其更贴合中文转录上下文，避免使用指令性语句。
+        """
         if not self.glossary:
             return ""
-        return ", ".join(self.glossary)
+        return "、".join(self.glossary)
 
     def save(self) -> None:
         """保存配置到 JSON 文件"""
