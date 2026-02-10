@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QCheckBox, QSystemTrayIcon,
     QMenu, QMessageBox, QSizePolicy, QScrollArea,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QColor, QIcon, QAction, QFont, QPixmap, QPainter
 from PyQt6.QtSvg import QSvgRenderer
 
@@ -114,7 +114,6 @@ class HotkeyButton(QPushButton):
 
         # ESC 取消
         if key_name == "esc":
-            from PyQt6.QtCore import QTimer
             QTimer.singleShot(0, self._stop_listening)
             return
 
@@ -123,7 +122,6 @@ class HotkeyButton(QPushButton):
             return
 
         self._hotkey = key_name.lower()
-        from PyQt6.QtCore import QTimer
         QTimer.singleShot(0, self._finish_capture)
 
     def _finish_capture(self) -> None:
@@ -317,6 +315,7 @@ class SettingsWindow(QMainWindow):
     def _make_text_input(self, placeholder: str = "", text: str = "", password: bool = False) -> QLineEdit:
         """Stitch: border #d1d5db rounded-md, focus:ring primary/20 focus:border primary"""
         edit = QLineEdit(text)
+        edit.setClearButtonEnabled(True)
         edit.setPlaceholderText(placeholder)
         if password:
             edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -529,6 +528,7 @@ class SettingsWindow(QMainWindow):
         # 添加术语行：输入框 + 按钮
         add_row = QHBoxLayout()
         self._glossary_input = QLineEdit()
+        self._glossary_input.setClearButtonEnabled(True)
         self._glossary_input.setPlaceholderText("Enter a term, e.g. gRPC")
         self._glossary_input.setFixedHeight(34)
         self._glossary_input.setStyleSheet("""
@@ -736,6 +736,17 @@ class SettingsWindow(QMainWindow):
         text = self._test_output.toPlainText()
         if text:
             QApplication.clipboard().setText(text)
+
+            # Feedback
+            original_text = self._test_copy_btn.text()
+            self._test_copy_btn.setText("✅ Copied")
+            self._test_copy_btn.setEnabled(False)
+
+            QTimer.singleShot(1500, lambda: self._reset_copy_btn(original_text))
+
+    def _reset_copy_btn(self, text: str) -> None:
+        self._test_copy_btn.setText(text)
+        self._test_copy_btn.setEnabled(True)
 
     # ---- History 页 (Stitch 设计) ----
     def _create_history_page(self) -> QWidget:
