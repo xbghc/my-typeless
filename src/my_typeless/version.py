@@ -1,6 +1,3 @@
-"""版本管理模块"""
+"""Version module -- injected at build time by scripts/build.py."""
 
-__version__ = "1.0.6"
-
-# 语义化版本号分量
-VERSION_TUPLE = tuple(int(x) for x in __version__.split("-")[0].split("."))
+__version__ = "0.0.0.dev0"
