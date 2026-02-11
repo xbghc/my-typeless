@@ -242,6 +242,7 @@ class UpdateChecker(QObject):
         self._worker.finished.connect(self._thread.quit)
         self._worker.finished.connect(self._worker.deleteLater)
         self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.finished.connect(lambda: setattr(self, '_thread', None))
         self._thread.start()
 
     def download(self, release: ReleaseInfo):
@@ -256,6 +257,7 @@ class UpdateChecker(QObject):
         self._dl_worker.finished.connect(self._dl_thread.quit)
         self._dl_worker.finished.connect(self._dl_worker.deleteLater)
         self._dl_thread.finished.connect(self._dl_thread.deleteLater)
+        self._dl_thread.finished.connect(lambda: setattr(self, '_dl_thread', None))
         self._dl_thread.start()
 
     # ── 内部槽 ────
