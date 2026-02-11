@@ -12,7 +12,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILE = ROOT / "src" / "my_typeless" / "version.py"
-PYPROJECT = ROOT / "pyproject.toml"
 SPEC_FILE = ROOT / "my_typeless.spec"
 VERSION_INFO_FILE = ROOT / "file_version_info.txt"
 RESOURCES_DIR = ROOT / "src" / "my_typeless" / "resources"
@@ -26,26 +25,12 @@ def read_version() -> str:
 
 
 def write_version(version: str) -> None:
-    """更新 version.py 和 pyproject.toml 中的版本号"""
-    # version.py
+    """将版本号注入 version.py（由 CI 在发布构建时调用）"""
     VERSION_FILE.write_text(
-        f'"""版本管理模块"""\n\n'
-        f'__version__ = "{version}"\n\n'
-        f"# 语义化版本号分量\n"
-        f'VERSION_TUPLE = tuple(int(x) for x in __version__.split("-")[0].split("."))\n',
+        '"""Version module -- injected at build time by scripts/build.py."""\n\n'
+        f'__version__ = "{version}"\n',
         encoding="utf-8",
     )
-
-    # pyproject.toml
-    content = PYPROJECT.read_text(encoding="utf-8")
-    content = re.sub(
-        r'^version\s*=\s*"[^"]*"',
-        f'version = "{version}"',
-        content,
-        count=1,
-        flags=re.MULTILINE,
-    )
-    PYPROJECT.write_text(content, encoding="utf-8")
     print(f"[build] Version updated to {version}")
 
 
