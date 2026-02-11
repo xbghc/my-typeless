@@ -157,7 +157,7 @@ def apply_update(setup_exe: Path) -> bool:
 
     try:
         subprocess.Popen(
-            [str(setup_exe), "/SILENT", "/SUPPRESSMSGBOXES", "/CLOSEAPPLICATIONS"],
+            [str(setup_exe), "/SILENT", "/SUPPRESSMSGBOXES"],
             close_fds=True,
         )
         return True

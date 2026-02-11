@@ -29,6 +29,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; 允许覆盖安装（升级）
 UsePreviousAppDir=yes
+; 如果旧版本仍在运行，强制关闭（静默升级时不弹窗）
+CloseApplications=force
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
