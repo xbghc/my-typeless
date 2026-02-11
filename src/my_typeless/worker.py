@@ -93,6 +93,20 @@ class Worker(QObject):
         logger.debug("Segment detected: %d bytes", len(wav_data))
         self._segment_queue.put(wav_data)
 
+    @staticmethod
+    def _get_tail_text(parts: list[str], max_len: int) -> str:
+        """从字符串列表中获取总长度不超过 max_len 的尾部内容"""
+        if max_len <= 0:
+            return ""
+        needed = []
+        current_len = 0
+        for part in reversed(parts):
+            needed.append(part)
+            current_len += len(part)
+            if current_len >= max_len:
+                break
+        return "".join(reversed(needed))[-max_len:]
+
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
@@ -117,13 +131,14 @@ class Worker(QObject):
 
                 # STT prompt: 累积转录尾部 + 术语表（Whisper 从前截断，术语放尾部确保保留）
                 if transcription_parts:
-                    accumulated = "".join(transcription_parts)
                     if base_stt_prompt:
                         tail_budget = _MAX_PROMPT_CHARS - len(base_stt_prompt) - 1
-                        tail = accumulated[-tail_budget:] if tail_budget > 0 else ""
+                        # Optimization: Use O(k) tail extraction instead of O(N) full join
+                        tail = self._get_tail_text(transcription_parts, tail_budget) if tail_budget > 0 else ""
                         stt_prompt = f"{tail} {base_stt_prompt}" if tail else base_stt_prompt
                     else:
-                        stt_prompt = accumulated[-_MAX_PROMPT_CHARS:]
+                        # Optimization: Avoid joining all parts for prompt construction
+                        stt_prompt = self._get_tail_text(transcription_parts, _MAX_PROMPT_CHARS)
                 else:
                     stt_prompt = base_stt_prompt
 

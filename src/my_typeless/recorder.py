@@ -96,9 +96,9 @@ class Recorder:
             )
             while self._recording:
                 data = self._stream.read(CHUNK_SIZE, exception_on_overflow=False)
-                self._frames.append(data)
-
                 if self._on_segment is None:
+                    # 仅在非增量模式下保存完整录音，避免增量模式下的内存泄漏
+                    self._frames.append(data)
                     continue
 
                 # --- 增量模式：停顿检测 ---
