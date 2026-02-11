@@ -81,11 +81,36 @@ class HistoryPageMixin:
         entries = load_history()
 
         if not entries:
-            empty = QLabel("No history yet. Use voice dictation or the Test page to generate entries.")
-            empty.setStyleSheet("color: #9ca3af; font-size: 13px;")
-            empty.setWordWrap(True)
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._history_layout.addWidget(empty)
+            empty_container = QWidget()
+            empty_layout = QVBoxLayout(empty_container)
+            empty_layout.setSpacing(6)
+            empty_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            msg = QLabel("No history yet")
+            msg.setStyleSheet("color: #1a1a1a; font-size: 14px; font-weight: 600;")
+            msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_layout.addWidget(msg)
+
+            sub = QLabel("Use voice dictation or the Playground to generate entries.")
+            sub.setStyleSheet("color: #9ca3af; font-size: 13px;")
+            sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty_layout.addWidget(sub)
+
+            btn = QPushButton("Go to Playground")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedWidth(140)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #ffffff; border: 1px solid #d1d5db;
+                    border-radius: 6px; color: #1a1a1a; font-size: 13px;
+                    padding: 6px 12px; margin-top: 8px;
+                }
+                QPushButton:hover { background: #f9fafb; border-color: #2b8cee; color: #2b8cee; }
+            """)
+            btn.clicked.connect(lambda: self._nav_list.setCurrentRow(4))
+            empty_layout.addWidget(btn, 0, Qt.AlignmentFlag.AlignCenter)
+
+            self._history_layout.addWidget(empty_container)
             self._history_layout.addStretch()
             return
 
