@@ -10,6 +10,7 @@
 
 import json
 import logging
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -49,8 +50,8 @@ class ReleaseInfo:
 
 # ── 版本比较 ──────────────────────────────────────────────────────────────
 def _parse_version(v: str) -> tuple[int, ...]:
-    """解析版本号字符串为元组，忽略前缀 'v'"""
-    v = v.lstrip("vV")
+    """解析版本号字符串为元组，忽略前缀 'v' 和预发布后缀（如 '-rc1'）"""
+    v = v.lstrip("vV").split("-")[0]
     parts = []
     for p in v.split("."):
         try:
@@ -188,11 +189,14 @@ class _DownloadWorker(QObject):
         self._release = release
 
     def run(self):
-        tmp = Path(tempfile.mkdtemp()) / "MyTypeless-Setup.exe"
+        tmp_dir = Path(tempfile.mkdtemp())
+        tmp = tmp_dir / "MyTypeless-Setup.exe"
         ok = download_release(
             self._release, tmp,
             progress_cb=lambda d, t: self.progress.emit(d, t),
         )
+        if not ok:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
         self.finished.emit(ok, str(tmp))
 
 
@@ -212,6 +216,9 @@ class UpdateChecker(QObject):
         super().__init__(parent)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.check_now)
+        self._thread: QThread | None = None
+        self._dl_thread: QThread | None = None
+        self._prompting = False
 
     def start(self, immediate: bool = True):
         """启动定时检查"""
@@ -225,6 +232,8 @@ class UpdateChecker(QObject):
 
     def check_now(self):
         """立即检查一次"""
+        if self._thread is not None and self._thread.isRunning():
+            return
         self._thread = QThread()
         self._worker = _CheckWorker()
         self._worker.moveToThread(self._thread)
@@ -233,10 +242,13 @@ class UpdateChecker(QObject):
         self._worker.finished.connect(self._thread.quit)
         self._worker.finished.connect(self._worker.deleteLater)
         self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.finished.connect(lambda: setattr(self, '_thread', None))
         self._thread.start()
 
     def download(self, release: ReleaseInfo):
         """开始下载新版本"""
+        if self._dl_thread is not None and self._dl_thread.isRunning():
+            return
         self._dl_thread = QThread()
         self._dl_worker = _DownloadWorker(release)
         self._dl_worker.moveToThread(self._dl_thread)
@@ -245,11 +257,12 @@ class UpdateChecker(QObject):
         self._dl_worker.finished.connect(self._dl_thread.quit)
         self._dl_worker.finished.connect(self._dl_worker.deleteLater)
         self._dl_thread.finished.connect(self._dl_thread.deleteLater)
+        self._dl_thread.finished.connect(lambda: setattr(self, '_dl_thread', None))
         self._dl_thread.start()
 
     # ── 内部槽 ────
     def _on_check_done(self, release):
-        if release is not None:
+        if release is not None and not self._prompting:
             self.update_available.emit(release)
 
     def _on_download_done(self, success: bool, path: str):
@@ -264,20 +277,24 @@ def prompt_and_apply_update(release: ReleaseInfo, checker: UpdateChecker):
     便捷函数：弹出更新提示对话框，用户确认后开始下载。
     一般由 update_available 信号触发。
     """
-    size_mb = release.size / (1024 * 1024) if release.size else 0
-    msg = (
-        f"发现新版本: {release.name} (v{release.version})\n\n"
-        f"当前版本: v{__version__}\n"
-        f"文件大小: {size_mb:.1f} MB\n\n"
-        f"是否立即更新？"
-    )
+    checker._prompting = True
+    try:
+        size_mb = release.size / (1024 * 1024) if release.size else 0
+        msg = (
+            f"发现新版本: {release.name} (v{release.version})\n\n"
+            f"当前版本: v{__version__}\n"
+            f"文件大小: {size_mb:.1f} MB\n\n"
+            f"是否立即更新？"
+        )
 
-    reply = QMessageBox.question(
-        None,
-        "My Typeless 更新",
-        msg,
-        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-    )
+        reply = QMessageBox.question(
+            None,
+            "My Typeless 更新",
+            msg,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
 
-    if reply == QMessageBox.StandardButton.Yes:
-        checker.download(release)
+        if reply == QMessageBox.StandardButton.Yes:
+            checker.download(release)
+    finally:
+        checker._prompting = False
