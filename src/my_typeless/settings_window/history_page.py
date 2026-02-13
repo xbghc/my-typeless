@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter
 
 from my_typeless.history import HistoryEntry, load_history, clear_history
-from my_typeless.settings_window.helpers import make_section_header
+from my_typeless.settings_window.helpers import make_section_header, CopyButton
 
 
 class HistoryPageMixin:
@@ -165,7 +165,8 @@ class HistoryPageMixin:
         out_text.setText(_elided)
         body_row.addWidget(out_text, 1)
 
-        copy_btn = QPushButton()
+        _output = entry.refined_output
+        copy_btn = CopyButton(lambda: _output)
         copy_btn.setFixedSize(24, 24)
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_btn.setToolTip("Copy")
@@ -185,8 +186,6 @@ class HistoryPageMixin:
         _cpainter.end()
         copy_btn.setIcon(QIcon(_cp))
         copy_btn.setIconSize(QSize(16, 16))
-        _output = entry.refined_output
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(_output))
         body_row.addWidget(copy_btn, 0, Qt.AlignmentFlag.AlignTop)
 
         toggle_btn = QPushButton("▸")
