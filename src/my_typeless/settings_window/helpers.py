@@ -1,7 +1,10 @@
 """Stitch 设计稿 UI 工厂函数"""
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit
-from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QApplication
+)
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QColor
+from PyQt6.QtCore import QTimer, Qt
 
 
 def make_section_header(title: str, description: str) -> QWidget:
@@ -45,3 +48,69 @@ def make_text_input(placeholder: str = "", text: str = "", password: bool = Fals
         }
     """)
     return edit
+
+
+class CopyButton(QPushButton):
+    """
+    A button that copies text to clipboard and shows visual feedback (checkmark or text change).
+    Reverts to original state after 2 seconds.
+    """
+    def __init__(self, text_getter, parent=None):
+        super().__init__(parent)
+        self._text_getter = text_getter
+        self.clicked.connect(self._copy)
+
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._reset)
+
+        self._original_icon = None
+        self._original_text = None
+        self._check_icon = self._create_check_icon()
+
+    def _create_check_icon(self) -> QIcon:
+        pix = QPixmap(16, 16)
+        pix.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        pen = painter.pen()
+        pen.setColor(QColor("#22c55e"))  # Green
+        pen.setWidth(2)
+        painter.setPen(pen)
+
+        # Draw checkmark
+        painter.drawLine(3, 8, 6, 11)
+        painter.drawLine(6, 11, 13, 4)
+        painter.end()
+        return QIcon(pix)
+
+    def _copy(self):
+        text = self._text_getter() if callable(self._text_getter) else self._text_getter
+        if not text:
+            return
+
+        QApplication.clipboard().setText(text)
+
+        # Save original state if not already saved (e.g. rapid clicks)
+        if self._original_icon is None:
+            self._original_icon = self.icon()
+            self._original_text = self.text()
+
+        # Update UI
+        if self.text():
+            self.setText("✓ Copied")
+        else:
+            self.setIcon(self._check_icon)
+
+        self.setToolTip("Copied!")
+        self._timer.start(2000)
+
+    def _reset(self):
+        if self._original_icon is not None:
+            self.setIcon(self._original_icon)
+            self._original_icon = None
+
+        if self._original_text is not None:
+            self.setText(self._original_text)
+            self._original_text = None
