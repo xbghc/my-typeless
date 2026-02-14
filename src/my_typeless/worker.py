@@ -47,28 +47,37 @@ class Worker(QObject):
         self._recorder = Recorder()
         self._key_press_at: str = ""
         self._segment_queue: queue.Queue = queue.Queue()
+        self._text_queue: queue.Queue = queue.Queue()
 
     def update_config(self, config: AppConfig) -> None:
         """更新配置（在非录音状态下调用）"""
         self._config = config
 
     def start_recording(self) -> None:
-        """开始录音，同时启动增量转录消费线程"""
+        """开始录音，同时启动 STT 和 LLM 消费线程"""
         logger.debug("start_recording called")
         self._key_press_at = datetime.now().strftime(self._TIME_FMT)
         self.state_changed.emit("recording")
 
         self._segment_queue = queue.Queue()
+        self._text_queue = queue.Queue()
         self._recorder.start(on_segment=self._on_segment)
 
-        # 启动增量转录消费线程（录音期间即开始转录）
-        # 将队列作为参数传入，避免与后续录音会话的队列混淆
-        t = threading.Thread(
-            target=self._incremental_process,
-            args=(self._key_press_at, self._segment_queue),
+        # 启动 STT 线程
+        t_stt = threading.Thread(
+            target=self._stt_task,
+            args=(self._segment_queue, self._text_queue),
             daemon=True,
         )
-        t.start()
+        t_stt.start()
+
+        # 启动 LLM 线程
+        t_llm = threading.Thread(
+            target=self._llm_task,
+            args=(self._key_press_at, self._text_queue),
+            daemon=True,
+        )
+        t_llm.start()
 
     def stop_recording_and_process(self) -> None:
         """停止录音，将剩余音频送入队列并通知消费线程结束"""
@@ -93,18 +102,13 @@ class Worker(QObject):
         logger.debug("Segment detected: %d bytes", len(wav_data))
         self._segment_queue.put(wav_data)
 
-    def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
-        """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
+    def _stt_task(self, segment_queue: queue.Queue, text_queue: queue.Queue) -> None:
+        """STT 任务：消费音频 → 生成原始文本 → 推送到文本队列"""
         try:
             stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
             base_stt_prompt = self._config.build_stt_prompt()
-            llm_system_prompt = self._config.build_llm_system_prompt()
-
             transcription_parts: list[str] = []
-            refined_parts: list[str] = []
 
-            # 持续从队列中取出音频片段，逐段完成 STT + LLM
             while True:
                 try:
                     item = segment_queue.get(timeout=0.1)
@@ -113,9 +117,11 @@ class Worker(QObject):
 
                 if isinstance(item, tuple) and item[0] is _SENTINEL:
                     key_release_at = item[1]
+                    # 向下游 LLM 线程传递结束信号
+                    text_queue.put((_SENTINEL, key_release_at))
                     break
 
-                # STT prompt: 累积转录尾部 + 术语表（Whisper 从前截断，术语放尾部确保保留）
+                # STT prompt: 累积转录尾部 + 术语表
                 if transcription_parts:
                     accumulated = "".join(transcription_parts)
                     if base_stt_prompt:
@@ -131,10 +137,42 @@ class Worker(QObject):
                 text = stt.transcribe(item, prompt=stt_prompt)
                 logger.debug("Segment STT result: %r", text)
 
-                if not text or not text.strip():
+                if text and text.strip():
+                    transcription_parts.append(text)
+                    text_queue.put(text)
+
+        except Exception as e:
+            logger.error("STT processing error: %s", e, exc_info=True)
+            self.error_occurred.emit(str(e))
+            # 确保 LLM 线程也能收到错误或结束信号，避免挂起
+            # 使用当前时间作为 fallback key_release_at
+            fallback_release_at = datetime.now().strftime(self._TIME_FMT)
+            text_queue.put((_SENTINEL, fallback_release_at))
+
+    def _llm_task(self, key_press_at: str, text_queue: queue.Queue) -> None:
+        """LLM 任务：消费原始文本 → 精修 → 拼接 → 注入文本"""
+        try:
+            llm = LLMClient(self._config.llm)
+            llm_system_prompt = self._config.build_llm_system_prompt()
+
+            # 用于历史记录的原始文本部分（和 STT 线程的 transcription_parts 对应）
+            raw_parts: list[str] = []
+            refined_parts: list[str] = []
+            key_release_at = ""
+
+            while True:
+                try:
+                    item = text_queue.get(timeout=0.1)
+                except queue.Empty:
                     continue
 
-                transcription_parts.append(text)
+                if isinstance(item, tuple) and item[0] is _SENTINEL:
+                    key_release_at = item[1]
+                    break
+
+                # 收到的都是有效的文本字符串
+                text = item
+                raw_parts.append(text)
 
                 # LLM 精修：将已精修的前文作为上下文
                 llm_context = "".join(refined_parts)
@@ -150,14 +188,13 @@ class Worker(QObject):
             done_at = datetime.now().strftime(self._TIME_FMT)
 
             # 拼接全部结果
-            raw_text = "".join(transcription_parts)
+            raw_text = "".join(raw_parts)
             refined_text = "".join(refined_parts)
             logger.debug("Full STT result: %r", raw_text)
             logger.debug("Full LLM result: %r", refined_text)
 
             if not raw_text.strip():
                 logger.debug("Empty STT result, skipping")
-                self.state_changed.emit("idle")
                 return
 
             # 注入文本
@@ -165,7 +202,7 @@ class Worker(QObject):
             inject_text(refined_text)
             logger.debug("Text injected successfully")
 
-            # 记录历史（增量模式下 STT 和 LLM 交替进行，完成时间相同）
+            # 记录历史
             add_history(
                 raw_text, refined_text,
                 key_press_at=key_press_at,
@@ -177,7 +214,7 @@ class Worker(QObject):
             self.result_ready.emit(refined_text)
 
         except Exception as e:
-            logger.error("Processing error: %s", e, exc_info=True)
+            logger.error("LLM processing error: %s", e, exc_info=True)
             self.error_occurred.emit(str(e))
 
         finally:
