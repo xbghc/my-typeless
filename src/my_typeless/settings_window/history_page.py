@@ -5,10 +5,9 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QMessageBox, QScrollArea,
 )
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QColor, QIcon, QPixmap, QPainter
 
 from my_typeless.history import HistoryEntry, load_history, clear_history
-from my_typeless.settings_window.helpers import make_section_header
+from my_typeless.settings_window.helpers import make_section_header, CopyButton
 
 
 class HistoryPageMixin:
@@ -165,28 +164,14 @@ class HistoryPageMixin:
         out_text.setText(_elided)
         body_row.addWidget(out_text, 1)
 
-        copy_btn = QPushButton()
+        copy_btn = CopyButton(
+            text_getter=entry.refined_output,
+        )
         copy_btn.setFixedSize(24, 24)
-        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         copy_btn.setToolTip("Copy")
         copy_btn.setStyleSheet(_small_btn_ss)
-        # 绘制极简 copy 图标（两个重叠方块）
-        _cp = QPixmap(16, 16)
-        _cp.fill(Qt.GlobalColor.transparent)
-        _cpainter = QPainter(_cp)
-        _cpainter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        _cpen = _cpainter.pen()
-        _cpen.setColor(QColor("#9ca3af"))
-        _cpen.setWidthF(1.4)
-        _cpainter.setPen(_cpen)
-        _cpainter.setBrush(Qt.BrushStyle.NoBrush)
-        _cpainter.drawRoundedRect(5, 1, 10, 10, 2, 2)
-        _cpainter.drawRoundedRect(1, 5, 10, 10, 2, 2)
-        _cpainter.end()
-        copy_btn.setIcon(QIcon(_cp))
+        copy_btn.setIcon(CopyButton.generate_copy_icon())
         copy_btn.setIconSize(QSize(16, 16))
-        _output = entry.refined_output
-        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(_output))
         body_row.addWidget(copy_btn, 0, Qt.AlignmentFlag.AlignTop)
 
         toggle_btn = QPushButton("▸")
