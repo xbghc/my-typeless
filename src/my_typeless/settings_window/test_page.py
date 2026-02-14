@@ -5,11 +5,11 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
 
 from my_typeless.llm_client import LLMClient
 from my_typeless.history import add_history
-from my_typeless.settings_window.helpers import make_section_header, make_field_label
+from my_typeless.settings_window.helpers import make_section_header, make_field_label, CopyButton
 
 
 class TestPageMixin:
@@ -75,17 +75,21 @@ class TestPageMixin:
         output_label = make_field_label("Refined Output")
         output_label_row.addWidget(output_label)
         output_label_row.addStretch()
-        self._test_copy_btn = QPushButton("📋 Copy")
-        self._test_copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._test_copy_btn = CopyButton(
+            text_getter=self._test_output.toPlainText,
+            label="Copy"
+        )
+        self._test_copy_btn.setIcon(CopyButton.generate_copy_icon())
+        self._test_copy_btn.setIconSize(QSize(14, 14))
         self._test_copy_btn.setStyleSheet("""
             QPushButton {
                 border: none; background: transparent;
                 color: #2b8cee; font-size: 12px; font-weight: 500;
                 padding: 0 4px;
+                text-align: left;
             }
             QPushButton:hover { color: #1a7bd9; }
         """)
-        self._test_copy_btn.clicked.connect(self._copy_test_output)
         output_label_row.addWidget(self._test_copy_btn)
         layout.addLayout(output_label_row)
 
@@ -118,11 +122,6 @@ class TestPageMixin:
         layout.addStretch()
         return page
 
-    def _copy_test_output(self) -> None:
-        """复制精修结果到剪贴板"""
-        text = self._test_output.toPlainText()
-        if text:
-            QApplication.clipboard().setText(text)
 
     def _run_test(self) -> None:
         """使用当前配置调用 LLM 精修测试文本"""
