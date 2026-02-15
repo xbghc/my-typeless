@@ -48,9 +48,16 @@ class Worker(QObject):
         self._key_press_at: str = ""
         self._segment_queue: queue.Queue = queue.Queue()
 
+        # 初始化 STT 和 LLM 客户端，避免每次录音都重新初始化（节省 30ms+）
+        self._stt_client = STTClient(config.stt)
+        self._llm_client = LLMClient(config.llm)
+
     def update_config(self, config: AppConfig) -> None:
         """更新配置（在非录音状态下调用）"""
         self._config = config
+        # 更新客户端配置
+        self._stt_client = STTClient(config.stt)
+        self._llm_client = LLMClient(config.llm)
 
     def start_recording(self) -> None:
         """开始录音，同时启动增量转录消费线程"""
@@ -96,8 +103,8 @@ class Worker(QObject):
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
-            stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
+            stt = self._stt_client
+            llm = self._llm_client
             base_stt_prompt = self._config.build_stt_prompt()
             llm_system_prompt = self._config.build_llm_system_prompt()
 
