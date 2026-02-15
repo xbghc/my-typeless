@@ -8,8 +8,6 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from my_typeless.config import AppConfig
 from my_typeless.recorder import Recorder
-from my_typeless.stt_client import STTClient
-from my_typeless.llm_client import LLMClient
 from my_typeless.text_injector import inject_text
 from my_typeless.history import add_history
 
@@ -47,14 +45,30 @@ class Worker(QObject):
         self._recorder = Recorder()
         self._key_press_at: str = ""
         self._segment_queue: queue.Queue = queue.Queue()
+        self._stt_client = None
+        self._llm_client = None
 
     def update_config(self, config: AppConfig) -> None:
         """更新配置（在非录音状态下调用）"""
         self._config = config
+        # 重置客户端以在下次使用时重新初始化
+        self._stt_client = None
+        self._llm_client = None
+
+    def _ensure_clients(self):
+        """确保 STT 和 LLM 客户端已初始化"""
+        if self._stt_client is None:
+            from my_typeless.stt_client import STTClient
+            self._stt_client = STTClient(self._config.stt)
+
+        if self._llm_client is None:
+            from my_typeless.llm_client import LLMClient
+            self._llm_client = LLMClient(self._config.llm)
 
     def start_recording(self) -> None:
         """开始录音，同时启动增量转录消费线程"""
         logger.debug("start_recording called")
+        self._ensure_clients()
         self._key_press_at = datetime.now().strftime(self._TIME_FMT)
         self.state_changed.emit("recording")
 
@@ -63,9 +77,10 @@ class Worker(QObject):
 
         # 启动增量转录消费线程（录音期间即开始转录）
         # 将队列作为参数传入，避免与后续录音会话的队列混淆
+        # 同时传入已初始化的客户端实例，避免重复创建连接
         t = threading.Thread(
             target=self._incremental_process,
-            args=(self._key_press_at, self._segment_queue),
+            args=(self._key_press_at, self._segment_queue, self._stt_client, self._llm_client),
             daemon=True,
         )
         t.start()
@@ -93,11 +108,18 @@ class Worker(QObject):
         logger.debug("Segment detected: %d bytes", len(wav_data))
         self._segment_queue.put(wav_data)
 
-    def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
+    def _incremental_process(
+        self,
+        key_press_at: str,
+        segment_queue: queue.Queue,
+        stt_client,
+        llm_client,
+    ) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
-            stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
+            # 使用传入的客户端实例
+            stt = stt_client
+            llm = llm_client
             base_stt_prompt = self._config.build_stt_prompt()
             llm_system_prompt = self._config.build_llm_system_prompt()
 
