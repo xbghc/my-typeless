@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-from my_typeless.llm_client import LLMClient
 from my_typeless.history import add_history
 from my_typeless.settings_window.helpers import make_section_header, make_field_label
 
@@ -154,6 +153,7 @@ class TestPageMixin:
 
         def _call():
             try:
+                from my_typeless.llm_client import LLMClient
                 client = LLMClient(llm_config)
                 result = client.refine(raw_text, system_prompt=full_system_prompt)
                 self._test_done.emit(result, False)

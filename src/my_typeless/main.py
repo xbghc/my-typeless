@@ -11,7 +11,6 @@ from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
 from my_typeless.worker import Worker
 from my_typeless.tray import TrayIcon
-from my_typeless.settings_window import SettingsWindow
 from my_typeless.icons import load_app_icon
 from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
 
@@ -41,7 +40,7 @@ class MyTypelessApp:
         self._worker = Worker(self._config)
         self._hotkey = HotkeyListener(self._config.hotkey)
         self._tray = TrayIcon()
-        self._settings_window: SettingsWindow | None = None
+        self._settings_window: "SettingsWindow" | None = None
 
         # 自动更新检查
         self._updater = UpdateChecker()
@@ -75,6 +74,7 @@ class MyTypelessApp:
     def _open_settings(self) -> None:
         """打开设置窗口"""
         if self._settings_window is None:
+            from my_typeless.settings_window import SettingsWindow
             self._settings_window = SettingsWindow(self._config)
             self._settings_window.settings_saved.connect(self._on_settings_saved)
         else:
