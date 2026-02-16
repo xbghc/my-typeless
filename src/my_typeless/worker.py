@@ -94,17 +94,23 @@ class Worker(QObject):
         self._segment_queue.put(wav_data)
 
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
-        """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
+        """STT 生产线程：逐段 STT -> 放入 text_queue"""
+        # Create queue for LLM
+        text_queue = queue.Queue()
+
+        # Start LLM consumer thread
+        llm_thread = threading.Thread(
+            target=self._llm_loop,
+            args=(text_queue, key_press_at),
+            daemon=True,
+        )
+        llm_thread.start()
+
         try:
             stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
             base_stt_prompt = self._config.build_stt_prompt()
-            llm_system_prompt = self._config.build_llm_system_prompt()
-
             transcription_parts: list[str] = []
-            refined_parts: list[str] = []
 
-            # 持续从队列中取出音频片段，逐段完成 STT + LLM
             while True:
                 try:
                     item = segment_queue.get(timeout=0.1)
@@ -113,6 +119,9 @@ class Worker(QObject):
 
                 if isinstance(item, tuple) and item[0] is _SENTINEL:
                     key_release_at = item[1]
+                    # Pass sentinel to LLM
+                    stt_done_at = datetime.now().strftime(self._TIME_FMT)
+                    text_queue.put((_SENTINEL, key_release_at, stt_done_at))
                     break
 
                 # STT prompt: 累积转录尾部 + 术语表（Whisper 从前截断，术语放尾部确保保留）
@@ -135,49 +144,88 @@ class Worker(QObject):
                     continue
 
                 transcription_parts.append(text)
+                text_queue.put(text)
+
+        except Exception as e:
+            logger.error("STT error: %s", e, exc_info=True)
+            self.error_occurred.emit(str(e))
+            # Propagate error/stop to LLM
+            try:
+                stt_done_at = datetime.now().strftime(self._TIME_FMT)
+                text_queue.put((_SENTINEL, None, stt_done_at))
+            except Exception:
+                pass
+
+        # Wait for LLM thread to finish to ensure no data loss
+        llm_thread.join()
+
+    def _llm_loop(self, text_queue: queue.Queue, key_press_at: str) -> None:
+        """LLM 消费线程：逐段 LLM -> 拼接 -> 注入"""
+        try:
+            llm = LLMClient(self._config.llm)
+            llm_system_prompt = self._config.build_llm_system_prompt()
+            refined_parts: list[str] = []
+            raw_parts: list[str] = []
+
+            key_release_at = None
+            stt_done_at = None
+
+            while True:
+                try:
+                    item = text_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+
+                if isinstance(item, tuple) and item[0] is _SENTINEL:
+                    key_release_at = item[1]
+                    stt_done_at = item[2]
+                    break
+
+                # item is raw_text
+                raw_text = item
+                raw_parts.append(raw_text)
 
                 # LLM 精修：将已精修的前文作为上下文
                 llm_context = "".join(refined_parts)
                 logger.debug("Refining segment...")
                 refined = llm.refine(
-                    text,
+                    raw_text,
                     system_prompt=llm_system_prompt,
                     context=llm_context,
                 )
                 logger.debug("Segment LLM result: %r", refined)
                 refined_parts.append(refined)
 
-            done_at = datetime.now().strftime(self._TIME_FMT)
+            llm_done_at = datetime.now().strftime(self._TIME_FMT)
 
             # 拼接全部结果
-            raw_text = "".join(transcription_parts)
-            refined_text = "".join(refined_parts)
-            logger.debug("Full STT result: %r", raw_text)
-            logger.debug("Full LLM result: %r", refined_text)
+            full_raw_text = "".join(raw_parts)
+            full_refined_text = "".join(refined_parts)
+            logger.debug("Full STT result: %r", full_raw_text)
+            logger.debug("Full LLM result: %r", full_refined_text)
 
-            if not raw_text.strip():
+            if not full_raw_text.strip():
                 logger.debug("Empty STT result, skipping")
-                self.state_changed.emit("idle")
                 return
 
             # 注入文本
             logger.debug("Injecting text...")
-            inject_text(refined_text)
+            inject_text(full_refined_text)
             logger.debug("Text injected successfully")
 
-            # 记录历史（增量模式下 STT 和 LLM 交替进行，完成时间相同）
+            # 记录历史
             add_history(
-                raw_text, refined_text,
+                full_raw_text, full_refined_text,
                 key_press_at=key_press_at,
                 key_release_at=key_release_at,
-                stt_done_at=done_at,
-                llm_done_at=done_at,
+                stt_done_at=stt_done_at,
+                llm_done_at=llm_done_at,
             )
 
-            self.result_ready.emit(refined_text)
+            self.result_ready.emit(full_refined_text)
 
         except Exception as e:
-            logger.error("Processing error: %s", e, exc_info=True)
+            logger.error("LLM error: %s", e, exc_info=True)
             self.error_occurred.emit(str(e))
 
         finally:
