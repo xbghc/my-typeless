@@ -47,10 +47,23 @@ class Worker(QObject):
         self._recorder = Recorder()
         self._key_press_at: str = ""
         self._segment_queue: queue.Queue = queue.Queue()
+        # Lazily initialized clients to allow reuse
+        self._stt_client: STTClient | None = None
+        self._llm_client: LLMClient | None = None
 
     def update_config(self, config: AppConfig) -> None:
         """更新配置（在非录音状态下调用）"""
         self._config = config
+        # Invalidate clients to force recreation with new config
+        self._stt_client = None
+        self._llm_client = None
+
+    def _ensure_clients(self) -> None:
+        """Ensure STT and LLM clients are initialized"""
+        if self._stt_client is None:
+            self._stt_client = STTClient(self._config.stt)
+        if self._llm_client is None:
+            self._llm_client = LLMClient(self._config.llm)
 
     def start_recording(self) -> None:
         """开始录音，同时启动增量转录消费线程"""
@@ -96,8 +109,14 @@ class Worker(QObject):
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
-            stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
+            self._ensure_clients()
+            # Use cached clients
+            stt = self._stt_client
+            llm = self._llm_client
+            # Since _ensure_clients guarantees initialization, these won't be None
+            if stt is None or llm is None:
+                raise RuntimeError("Clients not initialized")
+
             base_stt_prompt = self._config.build_stt_prompt()
             llm_system_prompt = self._config.build_llm_system_prompt()
 
