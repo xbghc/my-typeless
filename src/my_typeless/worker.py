@@ -94,17 +94,23 @@ class Worker(QObject):
         self._segment_queue.put(wav_data)
 
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
-        """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
+        """增量处理消费线程：逐段 STT，并将结果送给 LLM 处理线程"""
+        # 启动 LLM 处理线程
+        llm_queue = queue.Queue()
+        llm_thread = threading.Thread(
+            target=self._llm_loop,
+            args=(key_press_at, llm_queue),
+            daemon=True,
+        )
+        llm_thread.start()
+
         try:
             stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
             base_stt_prompt = self._config.build_stt_prompt()
-            llm_system_prompt = self._config.build_llm_system_prompt()
 
             transcription_parts: list[str] = []
-            refined_parts: list[str] = []
 
-            # 持续从队列中取出音频片段，逐段完成 STT + LLM
+            # 持续从队列中取出音频片段，逐段完成 STT
             while True:
                 try:
                     item = segment_queue.get(timeout=0.1)
@@ -136,7 +142,49 @@ class Worker(QObject):
 
                 transcription_parts.append(text)
 
-                # LLM 精修：将已精修的前文作为上下文
+                # 将 STT 结果送入 LLM 队列
+                llm_queue.put(text)
+
+            # 拼接 STT 结果，发送给 LLM 线程作为结束信号
+            raw_text = "".join(transcription_parts)
+            llm_queue.put((_SENTINEL, key_release_at, raw_text))
+
+            # 等待 LLM 线程结束
+            llm_thread.join()
+
+        except Exception as e:
+            logger.error("Processing error: %s", e, exc_info=True)
+            self.error_occurred.emit(str(e))
+
+        finally:
+            # 确保 LLM 线程在异常退出时也能正确结束
+            if llm_thread.is_alive():
+                # 发送空数据哨兵，让 LLM 线程尽早退出且不执行注入逻辑
+                llm_queue.put((_SENTINEL, "", ""))
+                llm_thread.join(timeout=2.0)
+
+            self.state_changed.emit("idle")
+
+    def _llm_loop(self, key_press_at: str, llm_queue: queue.Queue) -> None:
+        """LLM 处理线程：逐段精修，最后统一注入"""
+        try:
+            llm = LLMClient(self._config.llm)
+            llm_system_prompt = self._config.build_llm_system_prompt()
+            refined_parts: list[str] = []
+
+            while True:
+                item = llm_queue.get()
+
+                # Check for sentinel
+                if isinstance(item, tuple) and item[0] is _SENTINEL:
+                    key_release_at = item[1]
+                    raw_text_full = item[2]
+                    break
+
+                # Assume item is str (text segment)
+                text = item
+
+                # LLM 精修
                 llm_context = "".join(refined_parts)
                 logger.debug("Refining segment...")
                 refined = llm.refine(
@@ -147,27 +195,21 @@ class Worker(QObject):
                 logger.debug("Segment LLM result: %r", refined)
                 refined_parts.append(refined)
 
+            # Finalization
             done_at = datetime.now().strftime(self._TIME_FMT)
-
-            # 拼接全部结果
-            raw_text = "".join(transcription_parts)
             refined_text = "".join(refined_parts)
-            logger.debug("Full STT result: %r", raw_text)
             logger.debug("Full LLM result: %r", refined_text)
 
-            if not raw_text.strip():
+            if not raw_text_full.strip():
                 logger.debug("Empty STT result, skipping")
-                self.state_changed.emit("idle")
                 return
 
-            # 注入文本
             logger.debug("Injecting text...")
             inject_text(refined_text)
             logger.debug("Text injected successfully")
 
-            # 记录历史（增量模式下 STT 和 LLM 交替进行，完成时间相同）
             add_history(
-                raw_text, refined_text,
+                raw_text_full, refined_text,
                 key_press_at=key_press_at,
                 key_release_at=key_release_at,
                 stt_done_at=done_at,
@@ -177,11 +219,8 @@ class Worker(QObject):
             self.result_ready.emit(refined_text)
 
         except Exception as e:
-            logger.error("Processing error: %s", e, exc_info=True)
+            logger.error("LLM Processing error: %s", e, exc_info=True)
             self.error_occurred.emit(str(e))
-
-        finally:
-            self.state_changed.emit("idle")
 
     def cleanup(self) -> None:
         """清理资源"""
