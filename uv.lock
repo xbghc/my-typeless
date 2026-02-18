@@ -182,7 +182,6 @@ wheels = [
 
 [[package]]
 name = "my-typeless"
-version = "1.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "keyboard" },
