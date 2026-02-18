@@ -158,7 +158,18 @@ class TestPageMixin:
                 result = client.refine(raw_text, system_prompt=full_system_prompt)
                 self._test_done.emit(result, False)
             except Exception as e:
-                self._test_done.emit(str(e), True)
+                import openai
+                if isinstance(e, (openai.AuthenticationError, openai.APIConnectionError,
+                                  openai.NotFoundError, openai.BadRequestError)):
+                    self._test_done.emit(str(e), True)
+                elif isinstance(e, openai.APITimeoutError):
+                    self._test_done.emit("API 请求超时，请检查网络连接或稍后重试。", True)
+                elif isinstance(e, openai.RateLimitError):
+                    self._test_done.emit("API 请求过于频繁，请稍后再试。", True)
+                elif isinstance(e, openai.APIStatusError):
+                    self._test_done.emit(f"API 服务异常 (HTTP {e.status_code})", True)
+                else:
+                    self._test_done.emit(str(e), True)
 
         threading.Thread(target=_call, daemon=True).start()
 

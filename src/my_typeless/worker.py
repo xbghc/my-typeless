@@ -37,7 +37,7 @@ class Worker(QObject):
 
     state_changed = pyqtSignal(str)
     result_ready = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)
+    error_occurred = pyqtSignal(str, bool)
 
     _TIME_FMT = "%H:%M:%S.%f"
 
@@ -178,7 +178,23 @@ class Worker(QObject):
 
         except Exception as e:
             logger.error("Processing error: %s", e, exc_info=True)
-            self.error_occurred.emit(str(e))
+            import openai
+            if isinstance(e, openai.AuthenticationError):
+                self.error_occurred.emit("API 密钥无效或已过期，请在设置中检查 API Key 是否正确。", True)
+            elif isinstance(e, openai.APIConnectionError):
+                self.error_occurred.emit("无法连接到 API 服务器，请检查网络连接和 API 地址是否正确。", True)
+            elif isinstance(e, openai.NotFoundError):
+                self.error_occurred.emit("API 模型或接口未找到，请检查模型名称和 API 地址是否正确。", True)
+            elif isinstance(e, openai.BadRequestError):
+                self.error_occurred.emit(f"API 请求参数错误：{e.message}", True)
+            elif isinstance(e, openai.APITimeoutError):
+                self.error_occurred.emit("API 请求超时，请检查网络连接或稍后重试。", False)
+            elif isinstance(e, openai.RateLimitError):
+                self.error_occurred.emit("API 请求过于频繁，请稍后再试或检查额度是否充足。", False)
+            elif isinstance(e, openai.APIStatusError):
+                self.error_occurred.emit(f"API 服务异常 (HTTP {e.status_code})，请稍后重试。", False)
+            else:
+                self.error_occurred.emit(f"发生未知错误：{e}", False)
 
         finally:
             self.state_changed.emit("idle")

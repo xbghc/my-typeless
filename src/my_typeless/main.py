@@ -13,6 +13,7 @@ from my_typeless.worker import Worker
 from my_typeless.tray import TrayIcon
 from my_typeless.settings_window import SettingsWindow
 from my_typeless.icons import load_app_icon
+from PyQt6.QtWidgets import QMessageBox
 from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
 
 _SERVER_NAME = "MyTypeless_SingleInstance"
@@ -47,7 +48,7 @@ class MyTypelessApp:
         self._updater = UpdateChecker()
         self._updater.update_available.connect(self._on_update_available)
         self._updater.update_downloaded.connect(self._on_update_downloaded)
-        self._updater.update_error.connect(self._on_error)
+        self._updater.update_error.connect(lambda msg: self._on_error(msg, False))
 
         self._connect_signals()
 
@@ -92,14 +93,17 @@ class MyTypelessApp:
         self._worker.update_config(config)
         self._hotkey.update_hotkey(config.hotkey)
 
-    def _on_error(self, msg: str) -> None:
-        """处理错误通知"""
-        self._tray.showMessage(
-            "My Typeless Error",
-            msg,
-            self._tray.MessageIcon.Warning,
-            3000,
-        )
+    def _on_error(self, msg: str, critical: bool) -> None:
+        """处理错误通知：配置类错误弹信息框，临时性错误用托盘通知"""
+        if critical:
+            QMessageBox.warning(None, "My Typeless", msg)
+        else:
+            self._tray.showMessage(
+                "My Typeless",
+                msg,
+                self._tray.MessageIcon.Warning,
+                3000,
+            )
 
     def _on_update_available(self, release) -> None:
         """发现新版本时提示用户"""
