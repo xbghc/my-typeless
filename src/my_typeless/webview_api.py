@@ -170,6 +170,6 @@ class SettingsAPI:
             return {"success": False, "error": str(e)}
 
     def close_window(self) -> None:
-        """关闭设置窗口"""
+        """隐藏设置窗口（窗口保持存活供下次打开）"""
         if self._window:
-            self._window.destroy()
+            self._window.hide()

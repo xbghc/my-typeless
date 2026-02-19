@@ -2,7 +2,6 @@
 
 import logging
 import sys
-import threading
 from pathlib import Path
 
 import webview
@@ -27,7 +26,6 @@ class MyTypelessApp:
 
     def __init__(self):
         self._config = AppConfig.load()
-        self._shutdown_event = threading.Event()
 
         # 初始化组件
         self._worker = Worker(self._config)
@@ -38,6 +36,11 @@ class MyTypelessApp:
 
         # 单实例信号服务器
         self._signal_server = SignalServer(on_signal=self._open_settings)
+
+        # WebView 设置窗口（在 run() 中创建）
+        self._api = SettingsAPI(self._config, on_save=self._on_settings_saved)
+        self._window = None
+        self._allow_close = False
 
         # 连接事件
         self._connect_events()
@@ -62,21 +65,16 @@ class MyTypelessApp:
         self._tray.on_quit = self._quit
 
     def _open_settings(self) -> None:
-        """打开设置窗口（pywebview，在新线程中运行）"""
-        def _show():
-            api = SettingsAPI(self._config, on_save=self._on_settings_saved)
-            window = webview.create_window(
-                "Settings - My Typeless",
-                url=str(_WEB_DIR / "index.html"),
-                js_api=api,
-                width=820,
-                height=540,
-                resizable=False,
-            )
-            api.set_window(window)
-            webview.start()
+        """显示设置窗口（重新加载页面以获取最新配置）"""
+        if self._window:
+            self._window.load_url(str(_WEB_DIR / "index.html"))
+            self._window.show()
 
-        threading.Thread(target=_show, daemon=True).start()
+    def _on_window_closing(self):
+        """拦截窗口关闭，改为隐藏"""
+        if not self._allow_close:
+            self._window.hide()
+            return False
 
     def _on_settings_saved(self, config: AppConfig) -> None:
         """设置保存后更新各组件"""
@@ -114,7 +112,10 @@ class MyTypelessApp:
         self._signal_server.stop()
         self._tray.stop()
         self._single_instance.release()
-        self._shutdown_event.set()
+        # 允许窗口真正关闭，webview.start() 随之返回
+        self._allow_close = True
+        if self._window:
+            self._window.destroy()
 
     def run(self) -> int:
         """启动应用"""
@@ -123,23 +124,38 @@ class MyTypelessApp:
             signal_existing_instance()
             return 0
 
-        # 启动各组件
-        self._signal_server.start()
-        self._hotkey.start()
-        self._updater.start(immediate=True)
+        # 创建隐藏的设置窗口（pywebview 需要主线程）
+        self._window = webview.create_window(
+            "Settings - My Typeless",
+            url=str(_WEB_DIR / "index.html"),
+            js_api=self._api,
+            width=820,
+            height=540,
+            resizable=False,
+            hidden=True,
+        )
+        self._api.set_window(self._window)
+        self._window.events.closing += self._on_window_closing
 
-        # 托盘在后台线程运行
-        self._tray.run_detached()
+        def _start_services():
+            """webview 就绪后启动后台服务"""
+            self._signal_server.start()
+            self._hotkey.start()
+            self._updater.start(immediate=True)
+            self._tray.run_detached()
 
-        # 主线程等待退出信号
-        self._shutdown_event.wait()
+        # 主线程运行 webview 事件循环（阻塞直到窗口被销毁）
+        webview.start(func=_start_services)
         return 0
 
 
 def main():
+    from my_typeless.config import CONFIG_DIR
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        filename=str(CONFIG_DIR / "app.log"),
     )
     app = MyTypelessApp()
     sys.exit(app.run())
