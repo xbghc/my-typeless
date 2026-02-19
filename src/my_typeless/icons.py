@@ -1,55 +1,36 @@
-"""图标与资源加载工具"""
+"""图标与资源加载工具 - 使用 Pillow"""
 
-import math
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QPixmap, QPainter
-from PyQt6.QtSvg import QSvgRenderer
-
+from PIL import Image
 
 RESOURCES_DIR = Path(__file__).parent / "resources"
 
 
-def load_svg_icon(filename: str, size: int = 64, *, hidpi: bool = True) -> QIcon:
-    """从 SVG 文件加载图标。
+def load_tray_icon(name: str, size: int = 64) -> Image.Image:
+    """加载托盘图标为 PIL Image（pystray 使用）
 
-    hidpi=True（默认）时生成多倍率 pixmap 以适配高 DPI 窗口图标；
-    hidpi=False 时只生成单一尺寸，适用于系统托盘等由系统管理缩放的场景。
+    优先加载预渲染的 PNG，回退到 ICO。
     """
-    svg_path = RESOURCES_DIR / filename
-    if not svg_path.exists():
-        return QIcon()
-    renderer = QSvgRenderer(str(svg_path))
-    icon = QIcon()
-    if hidpi:
-        screen = QApplication.primaryScreen()
-        max_scale = max(1, math.ceil(screen.devicePixelRatio())) if screen else 2
-        for scale in range(1, max_scale + 1):
-            px = size * scale
-            pixmap = QPixmap(px, px)
-            pixmap.fill(Qt.GlobalColor.transparent)
-            pixmap.setDevicePixelRatio(scale)
-            painter = QPainter(pixmap)
-            renderer.render(painter)
-            painter.end()
-            icon.addPixmap(pixmap)
-    else:
-        pixmap = QPixmap(size, size)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        renderer.render(painter)
-        painter.end()
-        icon.addPixmap(pixmap)
-    return icon
+    png_path = RESOURCES_DIR / f"{name}.png"
+    if png_path.exists():
+        img = Image.open(png_path)
+        if img.size != (size, size):
+            img = img.resize((size, size), Image.Resampling.LANCZOS)
+        return img
+
+    ico_path = RESOURCES_DIR / f"{name}.ico"
+    if ico_path.exists():
+        img = Image.open(ico_path)
+        img = img.resize((size, size), Image.Resampling.LANCZOS)
+        return img
+
+    # 回退：生成纯色方块
+    return Image.new("RGBA", (size, size), (100, 100, 100, 255))
 
 
-def load_app_icon() -> QIcon:
-    """加载应用图标（优先 SVG，回退 .ico）"""
-    svg_path = RESOURCES_DIR / "app_icon.svg"
-    if svg_path.exists():
-        return load_svg_icon("app_icon.svg", size=128)
+def load_app_icon() -> Image.Image:
+    """加载应用图标为 PIL Image"""
     ico_path = RESOURCES_DIR / "app_icon.ico"
     if ico_path.exists():
-        return QIcon(str(ico_path))
-    return QIcon()
+        return Image.open(ico_path)
+    return Image.new("RGBA", (256, 256), (59, 157, 245, 255))

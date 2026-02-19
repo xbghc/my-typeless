@@ -6,17 +6,20 @@ requires-python = ">=3.13"
 dependencies = [
     "keyboard>=0.13.5",
     "openai>=2.17.0",
+    "pillow>=10.0",
     "pyaudio>=0.2.14",
-    "pyqt6>=6.10.2",
+    "pystray>=0.19",
+    "pywebview>=5.0",
     "pywin32>=311",
 ]
 
 [project.gui-scripts]
 my-typeless = "my_typeless.main:main"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pyinstaller>=6.0",
+    "cairosvg>=2.7",
 ]
 
 [build-system]

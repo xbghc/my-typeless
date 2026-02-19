@@ -112,6 +112,33 @@ def generate_ico() -> None:
     print(f"[build] ICO generated: {ico_path} ({len(sizes)} sizes)")
 
 
+def generate_tray_pngs() -> None:
+    """从 SVG 生成托盘图标 PNG（pystray 使用 Pillow Image，需要 PNG 格式）"""
+    tray_icons = ["icon_idle", "icon_recording", "icon_processing"]
+    try:
+        import cairosvg
+    except ImportError:
+        # 检查 PNG 是否已存在
+        all_exist = all((RESOURCES_DIR / f"{name}.png").exists() for name in tray_icons)
+        if all_exist:
+            print("[build] cairosvg not installed, using existing PNG files")
+            return
+        print("[build] WARNING: cairosvg not installed, cannot generate tray PNGs", file=sys.stderr)
+        return
+
+    size = 64
+    for name in tray_icons:
+        svg_path = RESOURCES_DIR / f"{name}.svg"
+        png_path = RESOURCES_DIR / f"{name}.png"
+        if not svg_path.exists():
+            print(f"[build] SVG not found: {svg_path}, skipping")
+            continue
+        png_data = cairosvg.svg2png(url=str(svg_path), output_width=size, output_height=size)
+        png_path.write_bytes(png_data)
+
+    print(f"[build] Tray PNGs generated: {', '.join(tray_icons)}")
+
+
 def run_pyinstaller() -> None:
     """执行 PyInstaller 构建"""
     cmd = [
@@ -150,6 +177,7 @@ def main():
 
     generate_version_info(version)
     generate_ico()
+    generate_tray_pngs()
 
     if not args.no_build:
         run_pyinstaller()

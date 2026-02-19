@@ -1,55 +1,63 @@
-"""系统托盘图标 - 三种状态切换 + 右键菜单"""
+"""系统托盘图标 - 三种状态切换 + 菜单（pystray 实现）"""
 
-from PyQt6.QtWidgets import QSystemTrayIcon, QMenu, QMessageBox
-from PyQt6.QtGui import QAction
-from PyQt6.QtCore import pyqtSignal
+import threading
+import pystray
+from pystray import MenuItem, Menu
 
-from my_typeless.icons import load_svg_icon
+from my_typeless.icons import load_tray_icon
 from my_typeless.version import __version__ as APP_VERSION
 
 
-class TrayIcon(QSystemTrayIcon):
-    """系统托盘图标 - 三种状态切换 + 右键菜单"""
+class TrayManager:
+    """系统托盘图标管理器 - 三种状态 + 右键菜单"""
 
-    show_settings = pyqtSignal()
-    quit_app = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self):
         self._icons = {
-            "idle": load_svg_icon("icon_idle.svg", hidpi=False),
-            "recording": load_svg_icon("icon_recording.svg", hidpi=False),
-            "processing": load_svg_icon("icon_processing.svg", hidpi=False),
+            "idle": load_tray_icon("icon_idle"),
+            "recording": load_tray_icon("icon_recording"),
+            "processing": load_tray_icon("icon_processing"),
         }
-        self.setIcon(self._icons["idle"])
-        self.setToolTip("My Typeless - Ready")
+        self._state = "idle"
 
-        # 右键菜单
-        menu = QMenu()
-        settings_action = QAction("Settings...", menu)
-        settings_action.triggered.connect(self.show_settings.emit)
-        menu.addAction(settings_action)
+        # 回调（由 main.py 设置）
+        self.on_show_settings: callable = lambda: None
+        self.on_quit: callable = lambda: None
 
-        menu.addSeparator()
+        self._icon = pystray.Icon(
+            name="my-typeless",
+            icon=self._icons["idle"],
+            title="My Typeless - Ready",
+            menu=Menu(
+                MenuItem(
+                    "Settings...",
+                    lambda: self.on_show_settings(),
+                    default=True,  # 左键单击触发
+                ),
+                Menu.SEPARATOR,
+                MenuItem(
+                    f"About (v{APP_VERSION})",
+                    lambda: self._show_about(),
+                ),
+                Menu.SEPARATOR,
+                MenuItem(
+                    "Quit",
+                    lambda: self.on_quit(),
+                ),
+            ),
+        )
 
-        about_action = QAction("About", menu)
-        about_action.triggered.connect(self._show_about)
-        menu.addAction(about_action)
+    def run(self) -> None:
+        """在当前线程启动托盘（阻塞）"""
+        self._icon.run()
 
-        menu.addSeparator()
+    def run_detached(self) -> None:
+        """在后台线程启动托盘"""
+        thread = threading.Thread(target=self._icon.run, daemon=True)
+        thread.start()
 
-        quit_action = QAction("Quit", menu)
-        quit_action.triggered.connect(self.quit_app.emit)
-        menu.addAction(quit_action)
-
-        self.setContextMenu(menu)
-
-        # 双击托盘图标打开设置
-        self.activated.connect(self._on_activated)
-
-    def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self.show_settings.emit()
+    def stop(self) -> None:
+        """停止托盘图标"""
+        self._icon.stop()
 
     def set_state(self, state: str) -> None:
         """切换托盘图标状态 (idle / recording / processing)"""
@@ -59,14 +67,23 @@ class TrayIcon(QSystemTrayIcon):
             "processing": "My Typeless - Processing...",
         }
         if state in self._icons:
-            self.setIcon(self._icons[state])
-            self.setToolTip(tooltips.get(state, "My Typeless"))
+            self._state = state
+            self._icon.icon = self._icons[state]
+            self._icon.title = tooltips.get(state, "My Typeless")
+
+    def show_notification(self, title: str, message: str) -> None:
+        """显示 Windows 通知气泡"""
+        self._icon.notify(message, title)
+
+    def show_error(self, msg: str, critical: bool) -> None:
+        """显示错误通知"""
+        self.show_notification("My Typeless", msg)
 
     def _show_about(self) -> None:
-        QMessageBox.information(
-            None,
+        """显示关于信息"""
+        self.show_notification(
             "About My Typeless",
-            f"My Typeless v{APP_VERSION}\n\n"
+            f"My Typeless v{APP_VERSION}\n"
             "AI-powered voice dictation for Windows.\n"
             "Hold hotkey to speak, release to get polished text.",
         )

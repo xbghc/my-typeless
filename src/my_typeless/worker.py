@@ -4,9 +4,9 @@ import logging
 import queue
 import threading
 from datetime import datetime
-from PyQt6.QtCore import QObject, pyqtSignal
 
 from my_typeless.config import AppConfig
+from my_typeless.events import EventEmitter
 from my_typeless.recorder import Recorder
 from my_typeless.stt_client import STTClient
 from my_typeless.llm_client import LLMClient
@@ -22,27 +22,23 @@ _SENTINEL = object()
 _MAX_PROMPT_CHARS = 400
 
 
-class Worker(QObject):
+class Worker:
     """
     后台工作控制器，负责处理完整的语音→文本流水线
 
     录音过程中检测停顿，将已有的音频片段立即提交转录，
     从而在用户松开按键时大部分音频已完成转录，显著降低延迟。
 
-    Signals:
+    Events:
         state_changed(str): 状态变化 ("idle" / "recording" / "processing")
         result_ready(str): 精修文本就绪
-        error_occurred(str): 发生错误
+        error_occurred(str, bool): 发生错误 (消息, 是否严重)
     """
-
-    state_changed = pyqtSignal(str)
-    result_ready = pyqtSignal(str)
-    error_occurred = pyqtSignal(str, bool)
 
     _TIME_FMT = "%H:%M:%S.%f"
 
     def __init__(self, config: AppConfig):
-        super().__init__()
+        self.events = EventEmitter()
         self._config = config
         self._recorder = Recorder()
         self._key_press_at: str = ""
@@ -56,7 +52,7 @@ class Worker(QObject):
         """开始录音，同时启动增量转录消费线程"""
         logger.debug("start_recording called")
         self._key_press_at = datetime.now().strftime(self._TIME_FMT)
-        self.state_changed.emit("recording")
+        self.events.emit("state_changed","recording")
 
         self._segment_queue = queue.Queue()
         self._recorder.start(on_segment=self._on_segment)
@@ -82,7 +78,7 @@ class Worker(QObject):
 
         # 发送哨兵值（附带按键释放时间），告知消费线程不再有新片段
         self._segment_queue.put((_SENTINEL, key_release_at))
-        self.state_changed.emit("processing")
+        self.events.emit("state_changed","processing")
 
     # ------------------------------------------------------------------
     # 内部方法
@@ -157,7 +153,7 @@ class Worker(QObject):
 
             if not raw_text.strip():
                 logger.debug("Empty STT result, skipping")
-                self.state_changed.emit("idle")
+                self.events.emit("state_changed","idle")
                 return
 
             # 注入文本
@@ -174,30 +170,30 @@ class Worker(QObject):
                 llm_done_at=done_at,
             )
 
-            self.result_ready.emit(refined_text)
+            self.events.emit("result_ready",refined_text)
 
         except Exception as e:
             logger.error("Processing error: %s", e, exc_info=True)
             import openai
             if isinstance(e, openai.AuthenticationError):
-                self.error_occurred.emit("API 密钥无效或已过期，请在设置中检查 API Key 是否正确。", True)
+                self.events.emit("error_occurred","API 密钥无效或已过期，请在设置中检查 API Key 是否正确。", True)
             elif isinstance(e, openai.APIConnectionError):
-                self.error_occurred.emit("无法连接到 API 服务器，请检查网络连接和 API 地址是否正确。", True)
+                self.events.emit("error_occurred","无法连接到 API 服务器，请检查网络连接和 API 地址是否正确。", True)
             elif isinstance(e, openai.NotFoundError):
-                self.error_occurred.emit("API 模型或接口未找到，请检查模型名称和 API 地址是否正确。", True)
+                self.events.emit("error_occurred","API 模型或接口未找到，请检查模型名称和 API 地址是否正确。", True)
             elif isinstance(e, openai.BadRequestError):
-                self.error_occurred.emit(f"API 请求参数错误：{e.message}", True)
+                self.events.emit("error_occurred",f"API 请求参数错误：{e.message}", True)
             elif isinstance(e, openai.APITimeoutError):
-                self.error_occurred.emit("API 请求超时，请检查网络连接或稍后重试。", False)
+                self.events.emit("error_occurred","API 请求超时，请检查网络连接或稍后重试。", False)
             elif isinstance(e, openai.RateLimitError):
-                self.error_occurred.emit("API 请求过于频繁，请稍后再试或检查额度是否充足。", False)
+                self.events.emit("error_occurred","API 请求过于频繁，请稍后再试或检查额度是否充足。", False)
             elif isinstance(e, openai.APIStatusError):
-                self.error_occurred.emit(f"API 服务异常 (HTTP {e.status_code})，请稍后重试。", False)
+                self.events.emit("error_occurred",f"API 服务异常 (HTTP {e.status_code})，请稍后重试。", False)
             else:
-                self.error_occurred.emit(f"发生未知错误：{e}", False)
+                self.events.emit("error_occurred",f"发生未知错误：{e}", False)
 
         finally:
-            self.state_changed.emit("idle")
+            self.events.emit("state_changed","idle")
 
     def cleanup(self) -> None:
         """清理资源"""

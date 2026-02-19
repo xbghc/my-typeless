@@ -11,15 +11,26 @@ wheels/
 file_version_info.txt
 *.old
 
+# Generated icons (built from SVG by scripts/build.py)
+src/my_typeless/resources/*.ico
+src/my_typeless/resources/*.png
+
 # Virtual environments
 .venv
 
 # IDE / Editor
 .vscode/
 .idea/
+.claude/
 
 # Playwright MCP screenshots
 .playwright-mcp/
+
+# Stitch UI design assets
+.stitch/
+
+# Node.js (Playwright verification)
+node_modules/
 
 # OS files
 Thumbs.db
