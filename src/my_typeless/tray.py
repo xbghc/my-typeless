@@ -81,14 +81,16 @@ class TrayManager:
         self.show_notification("My Typeless", msg)
 
     def _show_about(self) -> None:
-        """显示关于信息（Win32 MessageBox）"""
-        text = (
-            f"My Typeless v{APP_VERSION}\n\n"
-            "AI-powered voice dictation for Windows.\n"
-            "Hold hotkey to speak, release to get polished text."
-        )
-        MB_OK = 0x00000000
-        MB_ICONINFORMATION = 0x00000040
-        ctypes.windll.user32.MessageBoxW(
-            None, text, "About My Typeless", MB_OK | MB_ICONINFORMATION,
-        )
+        """显示关于信息（Win32 MessageBox，独立线程避免阻塞托盘消息泵）"""
+        def _show():
+            text = (
+                f"My Typeless v{APP_VERSION}\n\n"
+                "AI-powered voice dictation for Windows.\n"
+                "Hold hotkey to speak, release to get polished text."
+            )
+            MB_OK = 0x00000000
+            MB_ICONINFORMATION = 0x00000040
+            ctypes.windll.user32.MessageBoxW(
+                None, text, "About My Typeless", MB_OK | MB_ICONINFORMATION,
+            )
+        threading.Thread(target=_show, daemon=True).start()
