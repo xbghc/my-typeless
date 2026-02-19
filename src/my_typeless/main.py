@@ -1,146 +1,162 @@
 """My Typeless - AI 智能语音输入法入口"""
 
-import ctypes
+import logging
 import sys
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QTimer
-from PyQt6.QtNetwork import QLocalServer, QLocalSocket
+
+import webview
 
 from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
 from my_typeless.worker import Worker
-from my_typeless.tray import TrayIcon
-from my_typeless.settings_window import SettingsWindow
-from my_typeless.icons import load_app_icon
-from PyQt6.QtWidgets import QMessageBox
-from my_typeless.updater import UpdateChecker, apply_update, prompt_and_apply_update
+from my_typeless.tray import TrayManager
+from my_typeless.updater import UpdateChecker, apply_update
+from my_typeless.webview_api import SettingsAPI
+from my_typeless.single_instance import (
+    SingleInstance, SignalServer, signal_existing_instance,
+)
 
-_SERVER_NAME = "MyTypeless_SingleInstance"
+logger = logging.getLogger(__name__)
+
+_WEB_DIR = Path(__file__).parent / "web"
 
 
 class MyTypelessApp:
     """应用主控制器"""
 
     def __init__(self):
-        self._app = QApplication(sys.argv)
-        self._app.setQuitOnLastWindowClosed(False)
-        self._app.setApplicationName("My Typeless")
-
-        # 单实例服务器：监听来自新启动实例的连接
-        self._server = QLocalServer()
-        self._server.newConnection.connect(self._on_new_connection)
-        QLocalServer.removeServer(_SERVER_NAME)
-        self._server.listen(_SERVER_NAME)
-
-        self._app.setWindowIcon(load_app_icon())
-
-        # 加载配置
         self._config = AppConfig.load()
 
         # 初始化组件
         self._worker = Worker(self._config)
         self._hotkey = HotkeyListener(self._config.hotkey)
-        self._tray = TrayIcon()
-        self._settings_window: SettingsWindow | None = None
-
-        # 自动更新检查
+        self._tray = TrayManager()
         self._updater = UpdateChecker()
-        self._updater.update_available.connect(self._on_update_available)
-        self._updater.update_downloaded.connect(self._on_update_downloaded)
-        self._updater.update_error.connect(lambda msg: self._on_error(msg, False))
+        self._single_instance = SingleInstance()
 
-        self._connect_signals()
+        # 单实例信号服务器
+        self._signal_server = SignalServer(on_signal=self._open_window)
 
-    def _connect_signals(self) -> None:
-        """连接信号与槽"""
+        # WebView 设置窗口（在 run() 中创建）
+        self._api = SettingsAPI(self._config, on_save=self._on_config_saved)
+        self._window = None
+        self._allow_close = False
+
+        # 连接事件
+        self._connect_events()
+
+    def _connect_events(self) -> None:
+        """连接事件回调"""
         # 热键 → 录音控制
-        self._hotkey.key_pressed.connect(self._worker.start_recording)
-        self._hotkey.key_released.connect(self._worker.stop_recording_and_process)
+        self._hotkey.events.on("key_pressed", self._worker.start_recording)
+        self._hotkey.events.on("key_released", self._worker.stop_recording_and_process)
 
         # Worker 状态 → 托盘图标
-        self._worker.state_changed.connect(self._tray.set_state)
-        self._worker.error_occurred.connect(self._on_error)
+        self._worker.events.on("state_changed", self._tray.set_state)
+        self._worker.events.on("error_occurred", self._on_error)
+
+        # 更新检查
+        self._updater.events.on("update_available", self._on_update_available)
+        self._updater.events.on("update_downloaded", self._on_update_downloaded)
+        self._updater.events.on("update_error", lambda msg: self._on_error(msg, False))
 
         # 托盘菜单
-        self._tray.show_settings.connect(self._open_settings)
-        self._tray.quit_app.connect(self._quit)
+        self._tray.on_show_window = self._open_window
+        self._tray.on_quit = self._quit
 
-    def _on_new_connection(self) -> None:
-        """收到其他实例的连接，打开设置窗口"""
-        conn = self._server.nextPendingConnection()
-        if conn:
-            conn.close()
-            self._open_settings()
+    def _open_window(self) -> None:
+        """显示设置窗口（重新加载页面以获取最新配置）"""
+        if self._window:
+            self._window.load_url(str(_WEB_DIR / "index.html"))
+            self._window.show()
 
-    def _open_settings(self) -> None:
-        """打开设置窗口"""
-        if self._settings_window is None:
-            self._settings_window = SettingsWindow(self._config)
-            self._settings_window.settings_saved.connect(self._on_settings_saved)
-        else:
-            self._settings_window.update_config(self._config)
+    def _on_window_closing(self):
+        """拦截窗口关闭，改为隐藏"""
+        if not self._allow_close:
+            self._window.hide()
+            return False
 
-        self._settings_window.show()
-        self._settings_window.raise_()
-        self._settings_window.activateWindow()
-        # 由第二个实例授权后，直接调用 SetForegroundWindow 即可生效
-        ctypes.windll.user32.SetForegroundWindow(int(self._settings_window.winId()))
-
-    def _on_settings_saved(self, config: AppConfig) -> None:
+    def _on_config_saved(self, config: AppConfig) -> None:
         """设置保存后更新各组件"""
         self._config = config
         self._worker.update_config(config)
         self._hotkey.update_hotkey(config.hotkey)
 
     def _on_error(self, msg: str, critical: bool) -> None:
-        """处理错误通知：配置类错误弹信息框，临时性错误用托盘通知"""
-        if critical:
-            QMessageBox.warning(None, "My Typeless", msg)
-        else:
-            self._tray.showMessage(
-                "My Typeless",
-                msg,
-                self._tray.MessageIcon.Warning,
-                3000,
-            )
+        """处理错误通知"""
+        self._tray.show_error(msg, critical)
 
     def _on_update_available(self, release) -> None:
-        """发现新版本时提示用户"""
-        prompt_and_apply_update(release, self._updater)
+        """发现新版本时通过托盘通知用户"""
+        size_mb = release.size / (1024 * 1024) if release.size else 0
+        self._tray.show_notification(
+            "My Typeless 更新",
+            f"发现新版本: {release.name} (v{release.version})\n"
+            f"文件大小: {size_mb:.1f} MB\n"
+            f"请打开设置进行更新。",
+        )
+        # 自动开始下载
+        self._updater.download(release)
 
     def _on_update_downloaded(self, path: str) -> None:
-        """更新下载完成，启动安装程序并干净退出当前实例"""
+        """更新下载完成，启动安装程序并退出"""
         if apply_update(Path(path)):
             self._quit()
 
     def _quit(self) -> None:
         """退出应用"""
+        logger.info("Shutting down...")
         self._updater.stop()
         self._hotkey.stop()
         self._worker.cleanup()
-        self._server.close()
-        self._tray.hide()
-        self._app.quit()
+        self._signal_server.stop()
+        self._tray.stop()
+        self._single_instance.release()
+        # 允许窗口真正关闭，webview.start() 随之返回
+        self._allow_close = True
+        if self._window:
+            self._window.destroy()
 
     def run(self) -> int:
         """启动应用"""
-        self._hotkey.start()
-        self._tray.show()
-        self._updater.start(immediate=True)
-        return self._app.exec()
+        # 单实例检查
+        if not self._single_instance.try_acquire():
+            signal_existing_instance()
+            return 0
+
+        # 创建隐藏的设置窗口（pywebview 需要主线程）
+        self._window = webview.create_window(
+            "My Typeless",
+            url=str(_WEB_DIR / "index.html"),
+            js_api=self._api,
+            width=820,
+            height=540,
+            resizable=False,
+            hidden=True,
+        )
+        self._api.set_window(self._window)
+        self._window.events.closing += self._on_window_closing
+
+        def _start_services():
+            """webview 就绪后启动后台服务"""
+            self._signal_server.start()
+            self._hotkey.start()
+            self._updater.start(immediate=True)
+            self._tray.run_detached()
+
+        # 主线程运行 webview 事件循环（阻塞直到窗口被销毁）
+        webview.start(func=_start_services)
+        return 0
 
 
 def main():
-    # 尝试连接已运行的实例
-    socket = QLocalSocket()
-    socket.connectToServer(_SERVER_NAME)
-    if socket.waitForConnected(500):
-        # 第二个实例是用户刚点击的前台进程，有权授权其他进程设置前台窗口
-        ctypes.windll.user32.AllowSetForegroundWindow(0xFFFFFFFF)  # ASFW_ANY
-        socket.disconnectFromServer()
-        sys.exit(0)
-
+    from my_typeless.config import CONFIG_DIR
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        filename=str(CONFIG_DIR / "app.log"),
+    )
     app = MyTypelessApp()
     sys.exit(app.run())
 

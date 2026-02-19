@@ -3,9 +3,9 @@
 
 工作流:
 1. 启动时 / 定时 检查 GitHub Releases 最新版本
-2. 若发现新版本，弹出通知提示用户
-3. 用户确认后下载新版 exe 并替换当前文件
-4. 提示用户重启应用
+2. 若发现新版本，通过事件通知应用
+3. 用户确认后下载新版安装程序
+4. 启动安装程序并退出当前实例
 """
 
 import json
@@ -13,15 +13,14 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, QTimer
-from PyQt6.QtWidgets import QMessageBox
-
+from my_typeless.events import EventEmitter
 from my_typeless.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ logger = logging.getLogger(__name__)
 GITHUB_OWNER = "xbghc"
 GITHUB_REPO = "my-typeless"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
-CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000  # 4 小时
+CHECK_INTERVAL_S = 4 * 60 * 60  # 4 小时
 
 ASSET_NAME = "MyTypeless-Setup.exe"
 
@@ -147,8 +146,6 @@ def download_release(release: ReleaseInfo, dest: Path,
 def apply_update(setup_exe: Path) -> bool:
     """
     运行下载的安装程序执行静默升级。
-    Inno Setup 支持 /SILENT 静默安装，/SUPPRESSMSGBOXES 抑制弹窗，
-    /CLOSEAPPLICATIONS 自动关闭旧进程。
     成功启动安装程序后返回 True，由调用方负责退出当前进程。
     """
     if not setup_exe.exists():
@@ -166,135 +163,73 @@ def apply_update(setup_exe: Path) -> bool:
         return False
 
 
-# ── 后台检查线程 ──────────────────────────────────────────────────────────
-class _CheckWorker(QObject):
-    """在子线程执行网络请求"""
-    finished = pyqtSignal(object)  # ReleaseInfo | None
-
-    def run(self):
-        release = fetch_latest_release()
-        if release and is_newer(release.version):
-            self.finished.emit(release)
-        else:
-            self.finished.emit(None)
-
-
-class _DownloadWorker(QObject):
-    """在子线程下载更新包"""
-    progress = pyqtSignal(int, int)  # downloaded, total
-    finished = pyqtSignal(bool, str)  # success, file_path
-
-    def __init__(self, release: ReleaseInfo):
-        super().__init__()
-        self._release = release
-
-    def run(self):
-        tmp_dir = Path(tempfile.mkdtemp())
-        tmp = tmp_dir / "MyTypeless-Setup.exe"
-        ok = download_release(
-            self._release, tmp,
-            progress_cb=lambda d, t: self.progress.emit(d, t),
-        )
-        if not ok:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-        self.finished.emit(ok, str(tmp))
-
-
-class UpdateChecker(QObject):
+# ── 后台检查器 ────────────────────────────────────────────────────────────
+class UpdateChecker:
     """
-    主线程中使用的更新管理器。
+    更新管理器，使用 threading.Timer 定时检查。
 
-    典型用法:
-        checker = UpdateChecker(parent=tray_icon)
-        checker.start()
+    Events:
+        update_available(ReleaseInfo): 发现新版本
+        update_downloaded(str): 下载完成，参数为安装程序路径
+        update_error(str): 更新错误信息
     """
-    update_available = pyqtSignal(object)   # ReleaseInfo
-    update_downloaded = pyqtSignal(str)       # 新 exe 路径
-    update_error = pyqtSignal(str)
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self.check_now)
-        self._thread: QThread | None = None
-        self._dl_thread: QThread | None = None
-        self._prompting = False
+    def __init__(self):
+        self.events = EventEmitter()
+        self._timer: threading.Timer | None = None
+        self._running = False
 
     def start(self, immediate: bool = True):
         """启动定时检查"""
+        self._running = True
         if immediate:
             self.check_now()
-        self._timer.start(CHECK_INTERVAL_MS)
+        self._schedule_next()
 
     def stop(self):
         """停止定时检查"""
-        self._timer.stop()
+        self._running = False
+        if self._timer:
+            self._timer.cancel()
+            self._timer = None
+
+    def _schedule_next(self):
+        """安排下一次检查"""
+        if not self._running:
+            return
+        self._timer = threading.Timer(CHECK_INTERVAL_S, self._timer_tick)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _timer_tick(self):
+        """定时器触发"""
+        self.check_now()
+        self._schedule_next()
 
     def check_now(self):
-        """立即检查一次"""
-        if self._thread is not None and self._thread.isRunning():
-            return
-        self._thread = QThread()
-        self._worker = _CheckWorker()
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(self._on_check_done)
-        self._worker.finished.connect(self._thread.quit)
-        self._worker.finished.connect(self._worker.deleteLater)
-        self._thread.finished.connect(self._thread.deleteLater)
-        self._thread.finished.connect(lambda: setattr(self, '_thread', None))
-        self._thread.start()
+        """在后台线程立即检查一次"""
+        threading.Thread(target=self._do_check, daemon=True).start()
 
     def download(self, release: ReleaseInfo):
-        """开始下载新版本"""
-        if self._dl_thread is not None and self._dl_thread.isRunning():
+        """在后台线程开始下载新版本"""
+        threading.Thread(
+            target=self._do_download, args=(release,), daemon=True
+        ).start()
+
+    def _do_check(self):
+        if ".dev" in __version__:
+            logger.debug("Skip update check in dev mode (version=%s)", __version__)
             return
-        self._dl_thread = QThread()
-        self._dl_worker = _DownloadWorker(release)
-        self._dl_worker.moveToThread(self._dl_thread)
-        self._dl_thread.started.connect(self._dl_worker.run)
-        self._dl_worker.finished.connect(self._on_download_done)
-        self._dl_worker.finished.connect(self._dl_thread.quit)
-        self._dl_worker.finished.connect(self._dl_worker.deleteLater)
-        self._dl_thread.finished.connect(self._dl_thread.deleteLater)
-        self._dl_thread.finished.connect(lambda: setattr(self, '_dl_thread', None))
-        self._dl_thread.start()
+        release = fetch_latest_release()
+        if release and is_newer(release.version):
+            self.events.emit("update_available", release)
 
-    # ── 内部槽 ────
-    def _on_check_done(self, release):
-        if release is not None and not self._prompting:
-            self.update_available.emit(release)
-
-    def _on_download_done(self, success: bool, path: str):
-        if success:
-            self.update_downloaded.emit(path)
+    def _do_download(self, release: ReleaseInfo):
+        tmp_dir = Path(tempfile.mkdtemp())
+        tmp = tmp_dir / "MyTypeless-Setup.exe"
+        ok = download_release(release, tmp)
+        if ok:
+            self.events.emit("update_downloaded", str(tmp))
         else:
-            self.update_error.emit("下载更新失败，请稍后重试")
-
-
-def prompt_and_apply_update(release: ReleaseInfo, checker: UpdateChecker):
-    """
-    便捷函数：弹出更新提示对话框，用户确认后开始下载。
-    一般由 update_available 信号触发。
-    """
-    checker._prompting = True
-    try:
-        size_mb = release.size / (1024 * 1024) if release.size else 0
-        msg = (
-            f"发现新版本: {release.name} (v{release.version})\n\n"
-            f"当前版本: v{__version__}\n"
-            f"文件大小: {size_mb:.1f} MB\n\n"
-            f"是否立即更新？"
-        )
-
-        reply = QMessageBox.question(
-            None,
-            "My Typeless 更新",
-            msg,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            checker.download(release)
-    finally:
-        checker._prompting = False
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            self.events.emit("update_error", "下载更新失败，请稍后重试")

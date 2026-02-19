@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Typeless</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    "primary": "#18181b",
+                    "border-gray": "#e5e5e5",
+                    "text-muted": "#71717a",
+                    "placeholder-gray": "#a1a1aa",
+                },
+                fontFamily: {
+                    "display": ["Inter", "sans-serif"]
+                },
+            },
+        },
+    }
+</script>
+<style>
+    body {
+        font-family: 'Inter', sans-serif;
+        margin: 0;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    .nav-item-active {
+        background-color: #18181b;
+        color: #ffffff !important;
+    }
+    .nav-item:hover:not(.nav-item-active) {
+        background-color: #f4f4f5;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e5e5; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #d1d1d1; }
+    .page { display: none; }
+    .page.active { display: flex; flex-direction: column; height: 100%; }
+    .hotkey-btn.listening {
+        border-color: #18181b;
+        box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.2);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { box-shadow: 0 0 0 2px rgba(24, 24, 27, 0.2); }
+        50% { box-shadow: 0 0 0 4px rgba(24, 24, 27, 0.15); }
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .page.active { animation: fadeIn 0.15s ease; }
+</style>
+</head>
+<body class="font-display">
+<div class="flex w-screen h-screen bg-white">
+
+<!-- Sidebar Navigation -->
+<aside class="w-[220px] shrink-0 border-r border-border-gray flex flex-col p-4 justify-between bg-white">
+    <div class="flex flex-col gap-6">
+        <div class="px-2">
+            <h1 class="text-primary text-lg font-bold leading-none">My Typeless</h1>
+            <p class="text-text-muted text-xs mt-1">AI Voice Input</p>
+        </div>
+        <nav id="navList" class="flex flex-col gap-1">
+            <a class="nav-item nav-item-active flex items-center gap-3 px-3 py-2 rounded-lg transition-colors cursor-pointer" data-page="general">
+                <span class="material-symbols-outlined text-[20px]">settings</span>
+                <span class="text-sm font-medium">General</span>
+            </a>
+            <a class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="stt">
+                <span class="material-symbols-outlined text-[20px]">mic</span>
+                <span class="text-sm font-medium">Speech-to-Text</span>
+            </a>
+            <a class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="llm">
+                <span class="material-symbols-outlined text-[20px]">magic_button</span>
+                <span class="text-sm font-medium">Text Refinement</span>
+            </a>
+            <a class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="glossary">
+                <span class="material-symbols-outlined text-[20px]">menu_book</span>
+                <span class="text-sm font-medium">Glossary</span>
+            </a>
+            <a class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="history">
+                <span class="material-symbols-outlined text-[20px]">history</span>
+                <span class="text-sm font-medium">History</span>
+            </a>
+        </nav>
+    </div>
+    <div class="px-3 py-2">
+        <p id="versionLabel" class="text-[10px] text-text-muted font-medium tracking-wider">v...</p>
+    </div>
+</aside>
+
+<!-- Content Area -->
+<main class="flex-1 flex flex-col overflow-hidden relative">
+
+    <!-- ══════════ General Page ══════════ -->
+    <div class="page active" id="page-general">
+        <div class="px-8 pt-8 pb-6">
+            <h2 class="text-primary text-2xl font-bold tracking-tight">General</h2>
+            <p class="text-text-muted text-sm mt-1">Configure basic application behavior.</p>
+        </div>
+        <div class="flex-1 px-8 pb-20 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+            <div class="flex items-center justify-between p-5 border border-border-gray rounded-lg">
+                <div class="flex flex-col gap-0.5">
+                    <h3 class="text-primary text-sm font-semibold">Global Hotkey</h3>
+                    <p class="text-text-muted text-xs">Press to start/stop dictation</p>
+                </div>
+                <button class="hotkey-btn bg-white border border-border-gray px-4 py-1.5 rounded text-xs font-medium text-primary shadow-sm hover:bg-neutral-50 transition-colors uppercase tracking-tight" id="hotkeyBtn" onclick="startHotkeyCapture()">right alt</button>
+            </div>
+            <div class="flex items-center justify-between p-5 border border-border-gray rounded-lg">
+                <div class="flex flex-col gap-0.5">
+                    <h3 class="text-primary text-sm font-semibold">Start with Windows</h3>
+                    <p class="text-text-muted text-xs">Launch automatically on login</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" class="sr-only peer" id="autostartToggle"/>
+                    <div class="w-11 h-6 bg-border-gray peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════ Speech-to-Text Page ══════════ -->
+    <div class="page" id="page-stt">
+        <header class="flex items-center justify-between px-8 pt-8 pb-6">
+            <h2 class="text-primary text-2xl font-bold tracking-tight">Speech-to-Text</h2>
+            <div class="flex items-center gap-3">
+                <button class="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors text-gray-700" onclick="testSttConnection()">
+                    <span class="material-symbols-outlined text-[16px]">link</span>
+                    Test Connection
+                </button>
+                <span id="sttStatusBadge" class="px-2.5 py-1 bg-border-gray rounded-full text-[10px] font-bold text-primary tracking-wider">INACTIVE</span>
+            </div>
+        </header>
+        <div class="px-8 flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar pb-20">
+            <div class="flex flex-col gap-2">
+                <label class="text-primary text-sm font-semibold">API Base URL</label>
+                <input class="w-full h-11 px-4 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="sttUrl" placeholder="https://api.example.com/v1" type="text"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label class="text-primary text-sm font-semibold">API Key</label>
+                <div class="relative">
+                    <input class="w-full h-11 px-4 pr-10 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="sttKey" placeholder="sk-..." type="password"/>
+                    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary" onclick="togglePasswordVisibility(this)">
+                        <span class="material-symbols-outlined text-[20px]">visibility</span>
+                    </button>
+                </div>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label class="text-primary text-sm font-semibold">Model Name</label>
+                <input class="w-full h-11 px-4 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="sttModel" placeholder="whisper-large-v3" type="text"/>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════ Text Refinement + Playground Page ══════════ -->
+    <div class="page" id="page-llm">
+        <header class="flex items-center justify-between px-8 py-5 border-b border-gray-100 shrink-0">
+            <div class="flex flex-col">
+                <h2 class="text-primary text-xl font-bold">Text Refinement</h2>
+                <p class="text-gray-400 text-xs">Configure your AI model settings</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors text-gray-700" onclick="testLlmConnection()">
+                    <span class="material-symbols-outlined text-[16px]">link</span>
+                    Test Connection
+                </button>
+                <span id="llmStatusBadge" class="px-2.5 py-1 bg-primary text-white text-[10px] font-bold rounded tracking-widest">ACTIVE</span>
+            </div>
+        </header>
+        <div class="flex-1 overflow-y-auto custom-scrollbar pb-20">
+            <!-- API Config -->
+            <section class="px-8 py-6 space-y-5">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="material-symbols-outlined text-[18px] text-gray-400">api</span>
+                    <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide">API Config</h3>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-0.5">API Base URL</label>
+                        <input class="w-full bg-white border border-gray-200 rounded-lg h-10 px-3 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all text-gray-800 outline-none" id="llmUrl" placeholder="https://api.deepseek.com/v1" type="text"/>
+                    </div>
+                    <div class="relative">
+                        <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-0.5">API Key</label>
+                        <div class="relative">
+                            <input class="w-full bg-white border border-gray-200 rounded-lg h-10 px-3 pr-10 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all text-gray-800 outline-none" id="llmKey" placeholder="sk-..." type="password"/>
+                            <button class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onclick="togglePasswordVisibility(this)">
+                                <span class="material-symbols-outlined text-[18px]">visibility</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-0.5">Model Name</label>
+                        <input class="w-full bg-white border border-gray-200 rounded-lg h-10 px-3 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all text-gray-800 outline-none" id="llmModel" placeholder="deepseek-chat" type="text"/>
+                    </div>
+                </div>
+            </section>
+            <hr class="mx-8 border-gray-100"/>
+            <!-- System Prompt -->
+            <section class="px-8 py-6">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="material-symbols-outlined text-[18px] text-gray-400">terminal</span>
+                    <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide">System Prompt</h3>
+                </div>
+                <textarea class="w-full bg-white border border-gray-200 rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all text-gray-800 resize-none leading-relaxed outline-none" id="llmPrompt" placeholder="Define how the AI should refine your text..." rows="6"></textarea>
+            </section>
+            <hr class="mx-8 border-gray-100"/>
+            <!-- Playground -->
+            <section class="px-8 py-6 space-y-4">
+                <div class="flex flex-col gap-0.5 mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px] text-gray-400">science</span>
+                        <h3 class="text-sm font-bold text-gray-800 uppercase tracking-wide">Playground</h3>
+                    </div>
+                    <p class="text-[11px] text-gray-400 ml-6">Test refinement with current settings</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1.5">Raw Input</label>
+                        <textarea class="w-full bg-white border border-gray-200 rounded-lg p-3 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all text-gray-800 resize-none outline-none" id="testInput" placeholder="Paste unrefined transcript here..." rows="3"></textarea>
+                    </div>
+                    <div class="flex justify-end">
+                        <button class="bg-primary hover:bg-black text-white px-6 py-2 rounded-lg text-xs font-bold shadow-sm transition-transform active:scale-95 flex items-center gap-2" id="testRunBtn" onclick="runTest()">
+                            <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+                            Run
+                        </button>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1.5">
+                            <label class="text-xs font-bold text-gray-500">Refined Output</label>
+                            <button class="text-[10px] font-bold text-primary uppercase tracking-tighter hover:underline" onclick="copyTestOutput()">Copy</button>
+                        </div>
+                        <textarea class="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-500 resize-none italic outline-none" id="testOutput" placeholder="The refined text will appear here..." readonly rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 pt-2 text-gray-400">
+                    <div class="w-2 h-2 rounded-full bg-gray-300" id="testStatusDot"></div>
+                    <span class="text-[10px] font-bold uppercase tracking-widest" id="testStatus">Ready</span>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- ══════════ Glossary Page ══════════ -->
+    <div class="page" id="page-glossary">
+        <header class="px-8 pt-8 pb-4">
+            <h2 class="text-primary text-2xl font-bold tracking-tight">Glossary</h2>
+            <p class="text-text-muted text-sm mt-1">Terminology for accurate speech recognition and text refinement.</p>
+        </header>
+        <section class="px-8 py-4">
+            <div class="flex gap-2">
+                <input class="flex-1 h-10 px-4 rounded-lg border border-border-gray bg-white text-sm text-primary placeholder:text-placeholder-gray focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" id="glossaryInput" placeholder="Enter a term, e.g. gRPC" type="text" onkeydown="if(event.key==='Enter')addGlossaryTerm()"/>
+                <button class="bg-primary text-white h-10 px-5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-zinc-800 transition-colors" onclick="addGlossaryTerm()">
+                    <span class="material-symbols-outlined text-base">add</span>
+                    Add
+                </button>
+            </div>
+        </section>
+        <section class="px-8 flex-1 flex flex-col min-h-0 pb-20">
+            <div class="border border-border-gray rounded-lg overflow-hidden flex flex-col flex-1 bg-white">
+                <div class="overflow-y-auto custom-scrollbar flex-1" id="glossaryList">
+                    <p class="text-center text-text-muted text-sm py-8">No terms added yet.</p>
+                </div>
+            </div>
+            <div class="flex justify-between items-center py-3">
+                <span class="text-text-muted text-[12px] font-medium" id="glossaryCount">0 term(s)</span>
+                <button class="text-text-muted hover:text-primary text-[12px] font-bold flex items-center gap-1" onclick="deleteSelectedTerms()">
+                    <span class="material-symbols-outlined text-base">delete</span>
+                    Delete Selected
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <!-- ══════════ History Page ══════════ -->
+    <div class="page" id="page-history">
+        <header class="h-14 flex items-center justify-between px-6 border-b border-gray-100 shrink-0">
+            <h2 class="text-lg font-bold text-primary">History</h2>
+            <button class="text-xs font-semibold text-gray-500 hover:text-primary transition-colors" onclick="clearAllHistory()">Clear All</button>
+        </header>
+        <div class="flex-1 overflow-y-auto p-6 pb-20 space-y-4 custom-scrollbar" id="historyList">
+            <p class="text-center text-text-muted text-sm py-8">No history entries yet.</p>
+        </div>
+    </div>
+
+    <!-- Footer Actions (shared across all pages) -->
+    <footer class="absolute bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-100 flex items-center justify-end px-8 gap-3 z-10">
+        <button class="px-5 py-2 border border-border-gray rounded-lg text-sm font-medium text-primary hover:bg-neutral-50 transition-colors" onclick="cancelSettings()">Cancel</button>
+        <button class="px-6 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-black transition-colors" onclick="saveConfig()">Save</button>
+    </footer>
+
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
