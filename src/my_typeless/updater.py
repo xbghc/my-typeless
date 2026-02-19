@@ -217,6 +217,9 @@ class UpdateChecker:
         ).start()
 
     def _do_check(self):
+        if ".dev" in __version__:
+            logger.debug("Skip update check in dev mode (version=%s)", __version__)
+            return
         release = fetch_latest_release()
         if release and is_newer(release.version):
             self.events.emit("update_available", release)
