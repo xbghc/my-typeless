@@ -1,5 +1,6 @@
 """系统托盘图标 - 三种状态切换 + 菜单（pystray 实现）"""
 
+import ctypes
 import threading
 import pystray
 from pystray import MenuItem, Menu
@@ -20,7 +21,7 @@ class TrayManager:
         self._state = "idle"
 
         # 回调（由 main.py 设置）
-        self.on_show_settings: callable = lambda: None
+        self.on_show_window: callable = lambda: None
         self.on_quit: callable = lambda: None
 
         self._icon = pystray.Icon(
@@ -29,8 +30,8 @@ class TrayManager:
             title="My Typeless - Ready",
             menu=Menu(
                 MenuItem(
-                    "Settings...",
-                    lambda: self.on_show_settings(),
+                    "Open",
+                    lambda: self.on_show_window(),
                     default=True,  # 左键单击触发
                 ),
                 Menu.SEPARATOR,
@@ -80,10 +81,14 @@ class TrayManager:
         self.show_notification("My Typeless", msg)
 
     def _show_about(self) -> None:
-        """显示关于信息"""
-        self.show_notification(
-            "About My Typeless",
-            f"My Typeless v{APP_VERSION}\n"
+        """显示关于信息（Win32 MessageBox）"""
+        text = (
+            f"My Typeless v{APP_VERSION}\n\n"
             "AI-powered voice dictation for Windows.\n"
-            "Hold hotkey to speak, release to get polished text.",
+            "Hold hotkey to speak, release to get polished text."
+        )
+        MB_OK = 0x00000000
+        MB_ICONINFORMATION = 0x00000040
+        ctypes.windll.user32.MessageBoxW(
+            None, text, "About My Typeless", MB_OK | MB_ICONINFORMATION,
         )

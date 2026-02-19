@@ -35,10 +35,10 @@ class MyTypelessApp:
         self._single_instance = SingleInstance()
 
         # 单实例信号服务器
-        self._signal_server = SignalServer(on_signal=self._open_settings)
+        self._signal_server = SignalServer(on_signal=self._open_window)
 
         # WebView 设置窗口（在 run() 中创建）
-        self._api = SettingsAPI(self._config, on_save=self._on_settings_saved)
+        self._api = SettingsAPI(self._config, on_save=self._on_config_saved)
         self._window = None
         self._allow_close = False
 
@@ -61,10 +61,10 @@ class MyTypelessApp:
         self._updater.events.on("update_error", lambda msg: self._on_error(msg, False))
 
         # 托盘菜单
-        self._tray.on_show_settings = self._open_settings
+        self._tray.on_show_window = self._open_window
         self._tray.on_quit = self._quit
 
-    def _open_settings(self) -> None:
+    def _open_window(self) -> None:
         """显示设置窗口（重新加载页面以获取最新配置）"""
         if self._window:
             self._window.load_url(str(_WEB_DIR / "index.html"))
@@ -76,7 +76,7 @@ class MyTypelessApp:
             self._window.hide()
             return False
 
-    def _on_settings_saved(self, config: AppConfig) -> None:
+    def _on_config_saved(self, config: AppConfig) -> None:
         """设置保存后更新各组件"""
         self._config = config
         self._worker.update_config(config)
@@ -126,7 +126,7 @@ class MyTypelessApp:
 
         # 创建隐藏的设置窗口（pywebview 需要主线程）
         self._window = webview.create_window(
-            "Settings - My Typeless",
+            "My Typeless",
             url=str(_WEB_DIR / "index.html"),
             js_api=self._api,
             width=820,
