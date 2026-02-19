@@ -9,7 +9,7 @@ import keyboard
 from openai import OpenAI
 
 from my_typeless.config import AppConfig, LLMConfig
-from my_typeless.history import load_history, clear_history, add_history
+from my_typeless.history import get_history_page, clear_history, add_history
 from my_typeless.llm_client import LLMClient
 from my_typeless.version import __version__
 
@@ -71,10 +71,9 @@ class SettingsAPI:
             logger.error("Save config failed: %s", e)
             return {"success": False, "error": str(e)}
 
-    def get_history(self) -> list:
-        """返回历史记录"""
-        entries = load_history()
-        return [asdict(e) for e in entries]
+    def get_history(self, offset: int = 0, limit: int = 20) -> dict:
+        """返回历史记录（分页）"""
+        return get_history_page(offset, limit)
 
     def clear_history(self) -> dict:
         """清空历史记录"""

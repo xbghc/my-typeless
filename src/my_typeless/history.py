@@ -1,14 +1,20 @@
-"""历史记录管理 - 存储 STT→LLM 精修的输入输出对"""
+"""历史记录管理 - SQLite 存储 STT→LLM 精修的输入输出对"""
 
 import json
-from dataclasses import dataclass, asdict, field
+import logging
+import sqlite3
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 HISTORY_DIR = Path.home() / ".my-typeless"
-HISTORY_FILE = HISTORY_DIR / "history.json"
-MAX_HISTORY = 200  # 最多保留条数
+HISTORY_DB = HISTORY_DIR / "history.db"
+_LEGACY_FILE = HISTORY_DIR / "history.json"
+
+_conn: Optional[sqlite3.Connection] = None
 
 
 @dataclass
@@ -42,33 +48,60 @@ class HistoryEntry:
         )
 
 
-def load_history() -> List[HistoryEntry]:
-    """从磁盘加载历史记录（最新在前）"""
-    if not HISTORY_FILE.exists():
-        return []
-    try:
-        data = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
-        entries = []
-        for e in data:
-            entries.append(HistoryEntry(
-                timestamp=e["timestamp"],
-                raw_input=e["raw_input"],
-                refined_output=e["refined_output"],
-                key_press_at=e.get("key_press_at"),
-                key_release_at=e.get("key_release_at"),
-                stt_done_at=e.get("stt_done_at"),
-                llm_done_at=e.get("llm_done_at"),
-            ))
-        return entries
-    except (json.JSONDecodeError, TypeError, KeyError):
-        return []
+def _get_conn() -> sqlite3.Connection:
+    global _conn
+    if _conn is not None:
+        return _conn
 
-
-def save_history(entries: List[HistoryEntry]) -> None:
-    """保存历史记录到磁盘"""
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-    data = [asdict(e) for e in entries[:MAX_HISTORY]]
-    HISTORY_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    _conn = sqlite3.connect(str(HISTORY_DB), check_same_thread=False)
+    _conn.execute("PRAGMA journal_mode=WAL")
+    _conn.execute("""
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            raw_input TEXT NOT NULL,
+            refined_output TEXT NOT NULL,
+            key_press_at TEXT,
+            key_release_at TEXT,
+            stt_done_at TEXT,
+            llm_done_at TEXT
+        )
+    """)
+    _conn.commit()
+    _maybe_migrate()
+    return _conn
+
+
+def _maybe_migrate() -> None:
+    if not _LEGACY_FILE.exists():
+        return
+    try:
+        data = json.loads(_LEGACY_FILE.read_text(encoding="utf-8"))
+        if not data:
+            _LEGACY_FILE.unlink(missing_ok=True)
+            return
+        conn = _get_conn()
+        conn.executemany(
+            "INSERT INTO history (timestamp, raw_input, refined_output, key_press_at, key_release_at, stt_done_at, llm_done_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    e.get("timestamp", ""),
+                    e.get("raw_input", ""),
+                    e.get("refined_output", ""),
+                    e.get("key_press_at"),
+                    e.get("key_release_at"),
+                    e.get("stt_done_at"),
+                    e.get("llm_done_at"),
+                )
+                for e in data
+            ],
+        )
+        conn.commit()
+        _LEGACY_FILE.unlink(missing_ok=True)
+        logger.info("Migrated %d history entries from JSON to SQLite", len(data))
+    except Exception:
+        logger.exception("Failed to migrate history from JSON to SQLite")
 
 
 def add_history(
@@ -80,18 +113,54 @@ def add_history(
     stt_done_at: Optional[str] = None,
     llm_done_at: Optional[str] = None,
 ) -> None:
-    """新增一条历史记录（最新在前）"""
-    entries = load_history()
-    entries.insert(0, HistoryEntry.now(
+    """新增一条历史记录"""
+    entry = HistoryEntry.now(
         raw_input, refined_output,
         key_press_at=key_press_at,
         key_release_at=key_release_at,
         stt_done_at=stt_done_at,
         llm_done_at=llm_done_at,
-    ))
-    save_history(entries)
+    )
+    conn = _get_conn()
+    conn.execute(
+        "INSERT INTO history (timestamp, raw_input, refined_output, key_press_at, key_release_at, stt_done_at, llm_done_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (entry.timestamp, entry.raw_input, entry.refined_output, entry.key_press_at, entry.key_release_at, entry.stt_done_at, entry.llm_done_at),
+    )
+    conn.commit()
+
+
+def get_history_page(offset: int = 0, limit: int = 20) -> dict:
+    """分页查询历史记录（最新在前）"""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT id, timestamp, raw_input, refined_output, key_press_at, key_release_at, stt_done_at, llm_done_at FROM history ORDER BY id DESC LIMIT ? OFFSET ?",
+        (limit + 1, offset),
+    ).fetchall()
+
+    has_more = len(rows) > limit
+    entries = [
+        {
+            "id": r[0],
+            "timestamp": r[1],
+            "raw_input": r[2],
+            "refined_output": r[3],
+            "key_press_at": r[4],
+            "key_release_at": r[5],
+            "stt_done_at": r[6],
+            "llm_done_at": r[7],
+        }
+        for r in rows[:limit]
+    ]
+
+    return {
+        "entries": entries,
+        "has_more": has_more,
+        "next_offset": offset + limit if has_more else None,
+    }
 
 
 def clear_history() -> None:
     """清空所有历史记录"""
-    save_history([])
+    conn = _get_conn()
+    conn.execute("DELETE FROM history")
+    conn.commit()

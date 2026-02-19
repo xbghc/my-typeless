@@ -296,42 +296,78 @@ function copyTestOutput() {
     if (text) navigator.clipboard.writeText(text);
 }
 
-// ── History ──
+// ── History (scrolling pagination) ──
 
-async function loadHistory() {
-    const list = document.getElementById('historyList');
-    try {
-        const entries = await pywebview.api.get_history();
-        if (!entries || entries.length === 0) {
-            list.innerHTML = '<p class="text-center text-text-muted text-sm py-8">No history entries yet.</p>';
-            return;
-        }
-        list.innerHTML = entries.map(e => `
-            <div class="border border-gray-200 rounded-lg overflow-hidden bg-white flex flex-col">
-                <div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-                    <span class="text-[10px] font-medium text-gray-500 uppercase tracking-tight">${escapeHtml(e.timestamp)}</span>
+let historyOffset = 0;
+let historyLoading = false;
+let historyHasMore = true;
+
+function renderHistoryEntry(e) {
+    return `
+        <div class="border border-gray-200 rounded-lg overflow-hidden bg-white flex flex-col">
+            <div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                <span class="text-[10px] font-medium text-gray-500 uppercase tracking-tight">${escapeHtml(e.timestamp)}</span>
+            </div>
+            <div class="grid grid-cols-2 min-h-[80px]">
+                <div class="p-4 border-r border-gray-100">
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Input</label>
+                    <p class="text-sm text-gray-600 leading-relaxed">${escapeHtml(e.raw_input)}</p>
                 </div>
-                <div class="grid grid-cols-2 min-h-[80px]">
-                    <div class="p-4 border-r border-gray-100">
-                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Input</label>
-                        <p class="text-sm text-gray-600 leading-relaxed">${escapeHtml(e.raw_input)}</p>
-                    </div>
-                    <div class="p-4">
-                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Output</label>
-                        <p class="text-sm text-primary font-medium leading-relaxed">${escapeHtml(e.refined_output)}</p>
-                    </div>
+                <div class="p-4">
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Output</label>
+                    <p class="text-sm text-primary font-medium leading-relaxed">${escapeHtml(e.refined_output)}</p>
                 </div>
             </div>
-        `).join('');
+        </div>`;
+}
+
+async function loadHistory() {
+    historyOffset = 0;
+    historyHasMore = true;
+    historyLoading = false;
+    document.getElementById('historyList').innerHTML = '';
+    await loadMoreHistory();
+}
+
+async function loadMoreHistory() {
+    if (historyLoading || !historyHasMore) return;
+    historyLoading = true;
+    const list = document.getElementById('historyList');
+    try {
+        const data = await pywebview.api.get_history(historyOffset, 20);
+        const entries = data.entries || [];
+        historyHasMore = data.has_more;
+        if (data.next_offset != null) historyOffset = data.next_offset;
+
+        if (entries.length === 0 && historyOffset === 0) {
+            list.innerHTML = '<p class="text-center text-text-muted text-sm py-8">No history entries yet.</p>';
+        } else {
+            list.insertAdjacentHTML('beforeend', entries.map(renderHistoryEntry).join(''));
+        }
     } catch (e) {
-        list.innerHTML = `<p class="text-center text-text-muted text-sm py-8">Failed to load history: ${e}</p>`;
+        if (historyOffset === 0) {
+            list.innerHTML = `<p class="text-center text-text-muted text-sm py-8">Failed to load history: ${e}</p>`;
+        }
+    } finally {
+        historyLoading = false;
     }
 }
+
+// Scroll listener for infinite loading
+document.getElementById('historyList').addEventListener('scroll', () => {
+    const el = document.getElementById('historyList');
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+        loadMoreHistory();
+    }
+});
 
 async function clearAllHistory() {
     if (!confirm('Clear all history entries?')) return;
     try {
         await pywebview.api.clear_history();
+        historyOffset = 0;
+        historyHasMore = true;
+        historyLoading = false;
         document.getElementById('historyList').innerHTML =
             '<p class="text-center text-text-muted text-sm py-8">No history entries yet.</p>';
     } catch (e) {
