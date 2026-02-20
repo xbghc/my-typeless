@@ -151,9 +151,11 @@ function togglePasswordVisibility(btn) {
     if (input.type === 'password') {
         input.type = 'text';
         icon.textContent = 'visibility_off';
+        btn.setAttribute('aria-label', 'Hide password');
     } else {
         input.type = 'password';
         icon.textContent = 'visibility';
+        btn.setAttribute('aria-label', 'Show password');
     }
 }
 
@@ -291,9 +293,28 @@ async function runTest() {
     }
 }
 
-function copyTestOutput() {
+function copyTestOutput(btn) {
     const text = document.getElementById('testOutput').value;
-    if (text) navigator.clipboard.writeText(text);
+    if (!text) return;
+
+    navigator.clipboard.writeText(text).then(() => {
+        if (!btn) return;
+        if (btn.dataset.originalText) return;
+
+        btn.dataset.originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.remove('text-primary');
+        btn.classList.add('text-green-600');
+
+        setTimeout(() => {
+            btn.textContent = btn.dataset.originalText;
+            delete btn.dataset.originalText;
+            btn.classList.remove('text-green-600');
+            btn.classList.add('text-primary');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
 }
 
 // ── History (scrolling pagination) ──
