@@ -89,19 +89,72 @@ class Worker:
         logger.debug("Segment detected: %d bytes", len(wav_data))
         self._segment_queue.put(wav_data)
 
+    def _llm_loop(
+        self,
+        text_queue: queue.Queue,
+        refined_parts: list[str],
+        llm_system_prompt: str,
+        error_event: threading.Event,
+        error_container: list,
+    ) -> None:
+        """LLM 精修消费线程"""
+        try:
+            llm = LLMClient(self._config.llm)
+            while True:
+                item = text_queue.get()
+                if item is _SENTINEL:
+                    break
+
+                text = item
+                # LLM 精修：将已精修的前文作为上下文
+                llm_context = "".join(refined_parts)
+                logger.debug("Refining segment...")
+                refined = llm.refine(
+                    text,
+                    system_prompt=llm_system_prompt,
+                    context=llm_context,
+                )
+                logger.debug("Segment LLM result: %r", refined)
+                refined_parts.append(refined)
+        except Exception as e:
+            error_container.append(e)
+            error_event.set()
+
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
             stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
             base_stt_prompt = self._config.build_stt_prompt()
             llm_system_prompt = self._config.build_llm_system_prompt()
 
             transcription_parts: list[str] = []
             refined_parts: list[str] = []
 
-            # 持续从队列中取出音频片段，逐段完成 STT + LLM
+            # STT 和 LLM 之间的管道
+            text_queue: queue.Queue = queue.Queue()
+            error_event = threading.Event()
+            error_container = []
+
+            # 启动 LLM 线程
+            llm_thread = threading.Thread(
+                target=self._llm_loop,
+                args=(
+                    text_queue,
+                    refined_parts,
+                    llm_system_prompt,
+                    error_event,
+                    error_container,
+                ),
+                daemon=True,
+            )
+            llm_thread.start()
+
+            # 持续从队列中取出音频片段，逐段完成 STT，并推送到 LLM 队列
             while True:
+                # 检查 LLM 线程是否出错
+                if error_event.is_set():
+                    raise error_container[0]
+
                 try:
                     item = segment_queue.get(timeout=0.1)
                 except queue.Empty:
@@ -109,6 +162,8 @@ class Worker:
 
                 if isinstance(item, tuple) and item[0] is _SENTINEL:
                     key_release_at = item[1]
+                    # 通知 LLM 线程结束
+                    text_queue.put(_SENTINEL)
                     break
 
                 # STT prompt: 累积转录尾部 + 术语表（Whisper 从前截断，术语放尾部确保保留）
@@ -132,16 +187,17 @@ class Worker:
 
                 transcription_parts.append(text)
 
-                # LLM 精修：将已精修的前文作为上下文
-                llm_context = "".join(refined_parts)
-                logger.debug("Refining segment...")
-                refined = llm.refine(
-                    text,
-                    system_prompt=llm_system_prompt,
-                    context=llm_context,
-                )
-                logger.debug("Segment LLM result: %r", refined)
-                refined_parts.append(refined)
+                # 推送到 LLM 线程
+                text_queue.put(text)
+
+            # 等待 LLM 线程完成
+            while llm_thread.is_alive():
+                llm_thread.join(timeout=0.1)
+                if error_event.is_set():
+                    raise error_container[0]
+
+            if error_event.is_set():
+                raise error_container[0]
 
             done_at = datetime.now().strftime(self._TIME_FMT)
 
