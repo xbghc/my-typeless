@@ -55,16 +55,24 @@ class Worker:
         self.events.emit("state_changed","recording")
 
         self._segment_queue = queue.Queue()
+        self._text_queue = queue.Queue()
         self._recorder.start(on_segment=self._on_segment)
 
-        # 启动增量转录消费线程（录音期间即开始转录）
-        # 将队列作为参数传入，避免与后续录音会话的队列混淆
-        t = threading.Thread(
-            target=self._incremental_process,
-            args=(self._key_press_at, self._segment_queue),
+        # 启动增量 STT 线程
+        t_stt = threading.Thread(
+            target=self._process_audio,
+            args=(self._segment_queue, self._text_queue),
             daemon=True,
         )
-        t.start()
+        t_stt.start()
+
+        # 启动增量 LLM 线程
+        t_llm = threading.Thread(
+            target=self._process_text,
+            args=(self._key_press_at, self._text_queue),
+            daemon=True,
+        )
+        t_llm.start()
 
     def stop_recording_and_process(self) -> None:
         """停止录音，将剩余音频送入队列并通知消费线程结束"""
@@ -89,18 +97,34 @@ class Worker:
         logger.debug("Segment detected: %d bytes", len(wav_data))
         self._segment_queue.put(wav_data)
 
-    def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
-        """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
+    def _handle_error(self, e: Exception) -> None:
+        """统一错误处理"""
+        logger.error("Processing error: %s", e, exc_info=True)
+        import openai
+        if isinstance(e, openai.AuthenticationError):
+            self.events.emit("error_occurred","API 密钥无效或已过期，请在设置中检查 API Key 是否正确。", True)
+        elif isinstance(e, openai.APIConnectionError):
+            self.events.emit("error_occurred","无法连接到 API 服务器，请检查网络连接和 API 地址是否正确。", True)
+        elif isinstance(e, openai.NotFoundError):
+            self.events.emit("error_occurred","API 模型或接口未找到，请检查模型名称和 API 地址是否正确。", True)
+        elif isinstance(e, openai.BadRequestError):
+            self.events.emit("error_occurred",f"API 请求参数错误：{e.message}", True)
+        elif isinstance(e, openai.APITimeoutError):
+            self.events.emit("error_occurred","API 请求超时，请检查网络连接或稍后重试。", False)
+        elif isinstance(e, openai.RateLimitError):
+            self.events.emit("error_occurred","API 请求过于频繁，请稍后再试或检查额度是否充足。", False)
+        elif isinstance(e, openai.APIStatusError):
+            self.events.emit("error_occurred",f"API 服务异常 (HTTP {e.status_code})，请稍后重试。", False)
+        else:
+            self.events.emit("error_occurred",f"发生未知错误：{e}", False)
+
+    def _process_audio(self, segment_queue: queue.Queue, text_queue: queue.Queue) -> None:
+        """STT 线程：消费音频 -> 产生原始文本"""
         try:
             stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
             base_stt_prompt = self._config.build_stt_prompt()
-            llm_system_prompt = self._config.build_llm_system_prompt()
-
             transcription_parts: list[str] = []
-            refined_parts: list[str] = []
 
-            # 持续从队列中取出音频片段，逐段完成 STT + LLM
             while True:
                 try:
                     item = segment_queue.get(timeout=0.1)
@@ -109,6 +133,8 @@ class Worker:
 
                 if isinstance(item, tuple) and item[0] is _SENTINEL:
                     key_release_at = item[1]
+                    # 传递结束信号给 LLM 线程
+                    text_queue.put((_SENTINEL, key_release_at))
                     break
 
                 # STT prompt: 累积转录尾部 + 术语表（Whisper 从前截断，术语放尾部确保保留）
@@ -131,6 +157,36 @@ class Worker:
                     continue
 
                 transcription_parts.append(text)
+                text_queue.put(text)
+
+        except Exception as e:
+            self._handle_error(e)
+            # 即使发生错误，也要让 LLM 线程结束，避免 hung
+            # 使用 None 作为 key_release_at 表示异常结束
+            text_queue.put((_SENTINEL, None))
+
+    def _process_text(self, key_press_at: str, text_queue: queue.Queue) -> None:
+        """LLM 线程：消费原始文本 -> 精修 -> 注入"""
+        try:
+            llm = LLMClient(self._config.llm)
+            llm_system_prompt = self._config.build_llm_system_prompt()
+
+            refined_parts: list[str] = []
+            raw_parts: list[str] = [] # 用于历史记录
+
+            while True:
+                try:
+                    item = text_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+
+                if isinstance(item, tuple) and item[0] is _SENTINEL:
+                    key_release_at = item[1]
+                    break
+
+                # item 是 raw_text
+                text = item
+                raw_parts.append(text)
 
                 # LLM 精修：将已精修的前文作为上下文
                 llm_context = "".join(refined_parts)
@@ -146,14 +202,13 @@ class Worker:
             done_at = datetime.now().strftime(self._TIME_FMT)
 
             # 拼接全部结果
-            raw_text = "".join(transcription_parts)
+            raw_text = "".join(raw_parts)
             refined_text = "".join(refined_parts)
             logger.debug("Full STT result: %r", raw_text)
             logger.debug("Full LLM result: %r", refined_text)
 
             if not raw_text.strip():
                 logger.debug("Empty STT result, skipping")
-                self.events.emit("state_changed","idle")
                 return
 
             # 注入文本
@@ -161,7 +216,11 @@ class Worker:
             inject_text(refined_text)
             logger.debug("Text injected successfully")
 
-            # 记录历史（增量模式下 STT 和 LLM 交替进行，完成时间相同）
+            # 记录历史
+            # 如果 key_release_at 是 None (上游异常)，可以使用 done_at 代替或保留 None
+            if key_release_at is None:
+                key_release_at = done_at
+
             add_history(
                 raw_text, refined_text,
                 key_press_at=key_press_at,
@@ -173,25 +232,7 @@ class Worker:
             self.events.emit("result_ready",refined_text)
 
         except Exception as e:
-            logger.error("Processing error: %s", e, exc_info=True)
-            import openai
-            if isinstance(e, openai.AuthenticationError):
-                self.events.emit("error_occurred","API 密钥无效或已过期，请在设置中检查 API Key 是否正确。", True)
-            elif isinstance(e, openai.APIConnectionError):
-                self.events.emit("error_occurred","无法连接到 API 服务器，请检查网络连接和 API 地址是否正确。", True)
-            elif isinstance(e, openai.NotFoundError):
-                self.events.emit("error_occurred","API 模型或接口未找到，请检查模型名称和 API 地址是否正确。", True)
-            elif isinstance(e, openai.BadRequestError):
-                self.events.emit("error_occurred",f"API 请求参数错误：{e.message}", True)
-            elif isinstance(e, openai.APITimeoutError):
-                self.events.emit("error_occurred","API 请求超时，请检查网络连接或稍后重试。", False)
-            elif isinstance(e, openai.RateLimitError):
-                self.events.emit("error_occurred","API 请求过于频繁，请稍后再试或检查额度是否充足。", False)
-            elif isinstance(e, openai.APIStatusError):
-                self.events.emit("error_occurred",f"API 服务异常 (HTTP {e.status_code})，请稍后重试。", False)
-            else:
-                self.events.emit("error_occurred",f"发生未知错误：{e}", False)
-
+            self._handle_error(e)
         finally:
             self.events.emit("state_changed","idle")
 
