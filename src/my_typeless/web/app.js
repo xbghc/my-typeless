@@ -291,9 +291,40 @@ async function runTest() {
     }
 }
 
-function copyTestOutput() {
+function copyTestOutput(btn) {
     const text = document.getElementById('testOutput').value;
-    if (text) navigator.clipboard.writeText(text);
+    if (!text) return;
+
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            if (btn) {
+                if (!btn.dataset.originalText) {
+                    btn.dataset.originalText = btn.textContent;
+                }
+
+                if (btn.dataset.timer) {
+                    clearTimeout(parseInt(btn.dataset.timer));
+                }
+
+                const originalText = btn.dataset.originalText;
+                btn.textContent = 'Copied!';
+                btn.classList.remove('text-primary');
+                btn.classList.add('text-green-600');
+
+                const timerId = setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('text-green-600');
+                    btn.classList.add('text-primary');
+                    delete btn.dataset.originalText;
+                    delete btn.dataset.timer;
+                }, 2000);
+
+                btn.dataset.timer = timerId.toString();
+            }
+        }).catch(err => {
+            console.error('Copy failed:', err);
+        });
+    }
 }
 
 // ── History (scrolling pagination) ──
