@@ -150,7 +150,7 @@
                 <label class="text-primary text-sm font-semibold">API Key</label>
                 <div class="relative">
                     <input class="w-full h-11 px-4 pr-10 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="sttKey" placeholder="sk-..." type="password"/>
-                    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary" onclick="togglePasswordVisibility(this)">
+                    <button aria-label="Show password" class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary" onclick="togglePasswordVisibility(this)">
                         <span class="material-symbols-outlined text-[20px]">visibility</span>
                     </button>
                 </div>
@@ -193,7 +193,7 @@
                         <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-0.5">API Key</label>
                         <div class="relative">
                             <input class="w-full bg-white border border-gray-200 rounded-lg h-10 px-3 pr-10 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all text-gray-800 outline-none" id="llmKey" placeholder="sk-..." type="password"/>
-                            <button class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onclick="togglePasswordVisibility(this)">
+                            <button aria-label="Show password" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onclick="togglePasswordVisibility(this)">
                                 <span class="material-symbols-outlined text-[18px]">visibility</span>
                             </button>
                         </div>
@@ -258,7 +258,7 @@
         </header>
         <section class="px-8 py-4">
             <div class="flex gap-2">
-                <input class="flex-1 h-10 px-4 rounded-lg border border-border-gray bg-white text-sm text-primary placeholder:text-placeholder-gray focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" id="glossaryInput" placeholder="Enter a term, e.g. gRPC" type="text" onkeydown="if(event.key==='Enter')addGlossaryTerm()"/>
+                <input aria-label="New glossary term" class="flex-1 h-10 px-4 rounded-lg border border-border-gray bg-white text-sm text-primary placeholder:text-placeholder-gray focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" id="glossaryInput" placeholder="Enter a term, e.g. gRPC" type="text" onkeydown="if(event.key==='Enter')addGlossaryTerm()"/>
                 <button class="bg-primary text-white h-10 px-5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-zinc-800 transition-colors" onclick="addGlossaryTerm()">
                     <span class="material-symbols-outlined text-base">add</span>
                     Add
