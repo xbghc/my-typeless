@@ -151,9 +151,11 @@ function togglePasswordVisibility(btn) {
     if (input.type === 'password') {
         input.type = 'text';
         icon.textContent = 'visibility_off';
+        btn.setAttribute('aria-label', 'Hide password');
     } else {
         input.type = 'password';
         icon.textContent = 'visibility';
+        btn.setAttribute('aria-label', 'Show password');
     }
 }
 
@@ -291,9 +293,20 @@ async function runTest() {
     }
 }
 
-function copyTestOutput() {
+function copyTestOutput(btn) {
     const text = document.getElementById('testOutput').value;
-    if (text) navigator.clipboard.writeText(text);
+    if (text) {
+        navigator.clipboard.writeText(text);
+        if (btn) {
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            btn.disabled = true;
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }, 2000);
+        }
+    }
 }
 
 // ── History (scrolling pagination) ──
