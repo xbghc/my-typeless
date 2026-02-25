@@ -72,26 +72,26 @@
             <p class="text-text-muted text-xs mt-1">AI Voice Input</p>
         </div>
         <nav id="navList" class="flex flex-col gap-1">
-            <a class="nav-item nav-item-active flex items-center gap-3 px-3 py-2 rounded-lg transition-colors cursor-pointer" data-page="general">
+            <button type="button" class="nav-item nav-item-active w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors cursor-pointer" data-page="general">
                 <span class="material-symbols-outlined text-[20px]">settings</span>
                 <span class="text-sm font-medium">General</span>
-            </a>
-            <a class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="stt">
+            </button>
+            <button type="button" class="nav-item w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="stt">
                 <span class="material-symbols-outlined text-[20px]">mic</span>
                 <span class="text-sm font-medium">Speech-to-Text</span>
-            </a>
-            <a class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="llm">
+            </button>
+            <button type="button" class="nav-item w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="llm">
                 <span class="material-symbols-outlined text-[20px]">magic_button</span>
                 <span class="text-sm font-medium">Text Refinement</span>
-            </a>
-            <a class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="glossary">
+            </button>
+            <button type="button" class="nav-item w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="glossary">
                 <span class="material-symbols-outlined text-[20px]">menu_book</span>
                 <span class="text-sm font-medium">Glossary</span>
-            </a>
-            <a class="nav-item flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="history">
+            </button>
+            <button type="button" class="nav-item w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-text-muted transition-colors cursor-pointer" data-page="history">
                 <span class="material-symbols-outlined text-[20px]">history</span>
                 <span class="text-sm font-medium">History</span>
-            </a>
+            </button>
         </nav>
     </div>
     <div class="px-3 py-2">
@@ -122,7 +122,7 @@
                     <p class="text-text-muted text-xs">Launch automatically on login</p>
                 </div>
                 <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" class="sr-only peer" id="autostartToggle"/>
+                    <input type="checkbox" class="sr-only peer" id="autostartToggle" aria-label="Start with Windows"/>
                     <div class="w-11 h-6 bg-border-gray peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                 </label>
             </div>
@@ -150,7 +150,7 @@
                 <label class="text-primary text-sm font-semibold">API Key</label>
                 <div class="relative">
                     <input class="w-full h-11 px-4 pr-10 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="sttKey" placeholder="sk-..." type="password"/>
-                    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary" onclick="togglePasswordVisibility(this)">
+                    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary" onclick="togglePasswordVisibility(this)" aria-label="Show API key">
                         <span class="material-symbols-outlined text-[20px]">visibility</span>
                     </button>
                 </div>
@@ -193,7 +193,7 @@
                         <label class="block text-xs font-bold text-gray-500 mb-1.5 ml-0.5">API Key</label>
                         <div class="relative">
                             <input class="w-full bg-white border border-gray-200 rounded-lg h-10 px-3 pr-10 text-sm focus:ring-1 focus:ring-primary focus:border-primary transition-all text-gray-800 outline-none" id="llmKey" placeholder="sk-..." type="password"/>
-                            <button class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onclick="togglePasswordVisibility(this)">
+                            <button class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onclick="togglePasswordVisibility(this)" aria-label="Show API key">
                                 <span class="material-symbols-outlined text-[18px]">visibility</span>
                             </button>
                         </div>

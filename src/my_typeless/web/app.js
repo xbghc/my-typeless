@@ -151,9 +151,11 @@ function togglePasswordVisibility(btn) {
     if (input.type === 'password') {
         input.type = 'text';
         icon.textContent = 'visibility_off';
+        btn.setAttribute('aria-label', 'Hide API key');
     } else {
         input.type = 'password';
         icon.textContent = 'visibility';
+        btn.setAttribute('aria-label', 'Show API key');
     }
 }
 
@@ -204,7 +206,7 @@ function renderGlossary() {
     } else {
         list.innerHTML = glossaryTerms.map((term, i) => `
             <div class="flex items-center px-4 py-3 border-b border-border-gray group hover:bg-neutral-50 transition-colors" data-index="${i}" onclick="toggleGlossarySelect(this)">
-                <input type="checkbox" class="rounded border-border-gray text-primary focus:ring-0 cursor-pointer size-4" onclick="event.stopPropagation(); toggleGlossarySelect(this.parentElement)"/>
+                <input type="checkbox" class="rounded border-border-gray text-primary focus:ring-0 cursor-pointer size-4" onclick="event.stopPropagation(); toggleGlossarySelect(this.parentElement)" aria-label="Select term ${escapeHtml(term)}"/>
                 <span class="ml-4 text-sm font-medium text-primary">${escapeHtml(term)}</span>
             </div>
         `).join('');
