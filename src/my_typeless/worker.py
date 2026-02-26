@@ -4,6 +4,7 @@ import logging
 import queue
 import threading
 from datetime import datetime
+from typing import Any, Callable, Optional
 
 from my_typeless.config import AppConfig
 from my_typeless.events import EventEmitter
@@ -37,10 +38,20 @@ class Worker:
 
     _TIME_FMT = "%H:%M:%S.%f"
 
-    def __init__(self, config: AppConfig):
+    def __init__(
+        self,
+        config: AppConfig,
+        recorder_factory: Optional[Callable[[], Recorder]] = None,
+        stt_client_factory: Optional[Callable[[Any], STTClient]] = None,
+        llm_client_factory: Optional[Callable[[Any], LLMClient]] = None,
+        text_injector: Optional[Callable[[str], None]] = None,
+    ):
         self.events = EventEmitter()
         self._config = config
-        self._recorder = Recorder()
+        self._recorder = recorder_factory() if recorder_factory else Recorder()
+        self._stt_client_factory = stt_client_factory
+        self._llm_client_factory = llm_client_factory
+        self._text_injector = text_injector or inject_text
         self._key_press_at: str = ""
         self._segment_queue: queue.Queue = queue.Queue()
 
@@ -92,8 +103,16 @@ class Worker:
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
-            stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
+            stt = (
+                self._stt_client_factory(self._config.stt)
+                if self._stt_client_factory
+                else STTClient(self._config.stt)
+            )
+            llm = (
+                self._llm_client_factory(self._config.llm)
+                if self._llm_client_factory
+                else LLMClient(self._config.llm)
+            )
             base_stt_prompt = self._config.build_stt_prompt()
             llm_system_prompt = self._config.build_llm_system_prompt()
 
@@ -158,7 +177,7 @@ class Worker:
 
             # 注入文本
             logger.debug("Injecting text...")
-            inject_text(refined_text)
+            self._text_injector(refined_text)
             logger.debug("Text injected successfully")
 
             # 记录历史（增量模式下 STT 和 LLM 交替进行，完成时间相同）
