@@ -41,3 +41,13 @@ class STTClient:
 
         response = self._client.audio.transcriptions.create(**kwargs)
         return response.text
+
+    def check_connection(self) -> None:
+        """
+        检查 API 连接是否正常
+        通过尝试获取模型信息来验证 Base URL 和 API Key
+
+        Raises:
+            Exception: 如果连接失败或鉴权失败
+        """
+        self._client.models.retrieve(self._config.model)

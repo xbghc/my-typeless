@@ -43,10 +43,15 @@ class Worker:
         self._recorder = Recorder()
         self._key_press_at: str = ""
         self._segment_queue: queue.Queue = queue.Queue()
+        self._stt_client: STTClient | None = None
+        self._llm_client: LLMClient | None = None
 
     def update_config(self, config: AppConfig) -> None:
         """更新配置（在非录音状态下调用）"""
         self._config = config
+        # 配置变更后，需重新创建客户端实例
+        self._stt_client = None
+        self._llm_client = None
 
     def start_recording(self) -> None:
         """开始录音，同时启动增量转录消费线程"""
@@ -92,8 +97,12 @@ class Worker:
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
-            stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
+            # 懒加载并复用客户端实例
+            if self._stt_client is None:
+                self._stt_client = STTClient(self._config.stt)
+            if self._llm_client is None:
+                self._llm_client = LLMClient(self._config.llm)
+
             base_stt_prompt = self._config.build_stt_prompt()
             llm_system_prompt = self._config.build_llm_system_prompt()
 
@@ -124,7 +133,7 @@ class Worker:
                     stt_prompt = base_stt_prompt
 
                 logger.debug("Transcribing segment (%d bytes)...", len(item))
-                text = stt.transcribe(item, prompt=stt_prompt)
+                text = self._stt_client.transcribe(item, prompt=stt_prompt)
                 logger.debug("Segment STT result: %r", text)
 
                 if not text or not text.strip():
@@ -135,7 +144,7 @@ class Worker:
                 # LLM 精修：将已精修的前文作为上下文
                 llm_context = "".join(refined_parts)
                 logger.debug("Refining segment...")
-                refined = llm.refine(
+                refined = self._llm_client.refine(
                     text,
                     system_prompt=llm_system_prompt,
                     context=llm_context,

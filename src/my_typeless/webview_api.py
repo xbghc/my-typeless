@@ -6,10 +6,9 @@ from dataclasses import asdict
 
 import keyboard
 
-from openai import OpenAI
-
-from my_typeless.config import AppConfig, LLMConfig
+from my_typeless.config import AppConfig, LLMConfig, STTConfig
 from my_typeless.history import get_history_page, clear_history, add_history
+from my_typeless.stt_client import STTClient
 from my_typeless.llm_client import LLMClient
 from my_typeless.version import __version__
 
@@ -139,14 +138,20 @@ class SettingsAPI:
     def test_stt_connection(self, stt_override: dict | None = None) -> dict:
         """测试 STT API 连接"""
         try:
-            cfg = stt_override or {}
-            base_url = cfg.get("base_url") or self._config.stt.base_url
-            api_key = cfg.get("api_key") or self._config.stt.api_key
-            model = cfg.get("model") or self._config.stt.model
-            if not api_key:
+            if stt_override:
+                config = STTConfig(
+                    base_url=stt_override.get("base_url", self._config.stt.base_url),
+                    api_key=stt_override.get("api_key", self._config.stt.api_key),
+                    model=stt_override.get("model", self._config.stt.model),
+                )
+            else:
+                config = self._config.stt
+
+            if not config.api_key:
                 return {"success": False, "error": "API key is empty"}
-            client = OpenAI(base_url=base_url, api_key=api_key)
-            client.models.retrieve(model)
+
+            client = STTClient(config)
+            client.check_connection()
             return {"success": True}
         except Exception as e:
             logger.error("STT connection test failed: %s", e)
@@ -155,14 +160,20 @@ class SettingsAPI:
     def test_llm_connection(self, llm_override: dict | None = None) -> dict:
         """测试 LLM API 连接"""
         try:
-            cfg = llm_override or {}
-            base_url = cfg.get("base_url") or self._config.llm.base_url
-            api_key = cfg.get("api_key") or self._config.llm.api_key
-            model = cfg.get("model") or self._config.llm.model
-            if not api_key:
+            if llm_override:
+                config = LLMConfig(
+                    base_url=llm_override.get("base_url", self._config.llm.base_url),
+                    api_key=llm_override.get("api_key", self._config.llm.api_key),
+                    model=llm_override.get("model", self._config.llm.model),
+                )
+            else:
+                config = self._config.llm
+
+            if not config.api_key:
                 return {"success": False, "error": "API key is empty"}
-            client = OpenAI(base_url=base_url, api_key=api_key)
-            client.models.retrieve(model)
+
+            client = LLMClient(config)
+            client.check_connection()
             return {"success": True}
         except Exception as e:
             logger.error("LLM connection test failed: %s", e)
