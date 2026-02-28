@@ -1,0 +1,1 @@
+## 2024-03-20 - Accessibility Attributes\n**Learning:** Dynamic components like password toggles and generated lists need careful ARIA state management in vanilla JS apps.\n**Action:** Always include aria-label toggling alongside visual icon changes.
