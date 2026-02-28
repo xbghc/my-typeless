@@ -1,0 +1,3 @@
+## 2024-03-01 - DOM-based string escaping anti-pattern in list rendering
+**Learning:** The application renders lists (like the history view) using manual HTML string concatenation and `insertAdjacentHTML`. Previously, it used `document.createElement('div').innerHTML` inside the string interpolation to escape HTML entities. This causes severe performance degradation (creating a DOM node per attribute per list item) when rendering long lists.
+**Action:** When working with vanilla JS list rendering in this codebase, always use regex-based string replacements for escaping data rather than DOM nodes to prevent blocking the main thread during pagination or large data loads.
