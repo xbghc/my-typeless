@@ -1,0 +1,3 @@
+## 2024-05-24 - Stateful icon-only buttons require dynamic ARIA labels
+**Learning:** Icon-only buttons that toggle state (like password visibility toggles changing from "eye" to "eye-off") require both an initial ARIA label AND dynamic updates in JavaScript. A static `aria-label="Show password"` becomes incorrect and confusing for screen reader users once the password is actually shown.
+**Action:** When implementing or modifying stateful icon buttons, always ensure the JavaScript handler updates the `aria-label` attribute to reflect the *next* action (e.g., changing to "Hide password") alongside the visual icon change.
