@@ -1,0 +1,3 @@
+## 2024-03-03 - Navigation Keyboard Accessibility
+**Learning:** `<a>` tags without `href` attributes are completely ignored by the browser's sequential focus navigation (tab order), making them inaccessible to keyboard and screen reader users. This app's sidebar navigation was using `<a>` tags exclusively for styling and JavaScript click handlers.
+**Action:** Replace `<a>` tags used for on-page JavaScript actions with `<button>` elements. Add `.w-full.text-left` to maintain the block layout, and utilize `focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none` for standardized, accessible focus indicators.
