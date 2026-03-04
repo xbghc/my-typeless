@@ -43,10 +43,16 @@ class Worker:
         self._recorder = Recorder()
         self._key_press_at: str = ""
         self._segment_queue: queue.Queue = queue.Queue()
+        # ⚡ Bolt: 缓存 API 客户端以重用连接，避免重复 HTTP 握手开销
+        self._stt_client: STTClient | None = None
+        self._llm_client: LLMClient | None = None
 
     def update_config(self, config: AppConfig) -> None:
         """更新配置（在非录音状态下调用）"""
         self._config = config
+        # 配置更新时，使缓存失效
+        self._stt_client = None
+        self._llm_client = None
 
     def start_recording(self) -> None:
         """开始录音，同时启动增量转录消费线程"""
@@ -92,8 +98,15 @@ class Worker:
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
         """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
         try:
-            stt = STTClient(self._config.stt)
-            llm = LLMClient(self._config.llm)
+            # 延迟初始化，重用客户端实例连接池以降低延迟
+            if self._stt_client is None:
+                self._stt_client = STTClient(self._config.stt)
+            if self._llm_client is None:
+                self._llm_client = LLMClient(self._config.llm)
+
+            stt = self._stt_client
+            llm = self._llm_client
+
             base_stt_prompt = self._config.build_stt_prompt()
             llm_system_prompt = self._config.build_llm_system_prompt()
 
