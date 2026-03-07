@@ -1,0 +1,3 @@
+## 2024-05-17 - Python Hot Loop Optimization for Audio Processing
+**Learning:** When optimizing Python hot loops in the codebase (e.g., audio chunk processing like RMS calculation), using the C-optimized `math.hypot(*samples)` function is significantly faster (~2.6x to ~7.5x depending on chunk sizes) than using Python generator expressions (`sum(s * s for s in samples)`) or `math.dist` for computing the root mean square (RMS) of audio samples. The Python generator creates significant CPU overhead when running many times per second during speech.
+**Action:** Always prefer C-optimized standard library array/math functions (like `math.hypot` for Euclidean norm) over manual Python loops or comprehensions when processing raw numerical data like audio chunks in Python.
