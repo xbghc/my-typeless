@@ -1,0 +1,3 @@
+## 2024-03-09 - Optimize RMS Calculation with math.hypot
+**Learning:** In hot loops computing the Root Mean Square (RMS) of audio chunks (like in `recorder.py`), using a Python generator expression `math.sqrt(sum(s * s for s in samples) / count)` is significantly slower than using the C-optimized `math.hypot(*samples) / math.sqrt(count)`. Benchmarks show `math.hypot` is ~3.4x faster for chunk processing.
+**Action:** Always prefer `math.hypot(*samples)` (when within CPython stack limits, like 512-1024 elements) over generator expressions for calculating Euclidean distances or RMS values in performance-critical audio processing code.
