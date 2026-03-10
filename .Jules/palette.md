@@ -1,0 +1,3 @@
+## 2024-05-24 - Accessible Sidebar Navigation
+**Learning:** The application's custom tab-like sidebar navigation relied on `<a>` elements without `href` attributes, rendering them entirely unfocusable by keyboard users and functionally invisible as interactive elements to screen readers since they lacked standard button semantics.
+**Action:** Always replace non-navigating `<a>` tags acting as JS triggers with semantic `<button>` tags (applying `w-full text-left` to counteract default button alignment) and apply standardized focus-visible rings (`focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none`) for consistent a11y.
