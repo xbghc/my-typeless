@@ -1,0 +1,3 @@
+## 2024-05-24 - Semantic navigation buttons
+**Learning:** In-page navigation items (like sidebars and tabs) that act as single-page application routers must use semantic `<button>` elements instead of `<a>` tags without `href` attributes. This ensures native keyboard focusability and exposes the correct role to assistive technologies.
+**Action:** When creating or reviewing custom navigation elements in SPAs, always verify that items are natively focusable and have appropriate roles. Apply standard focus rings (e.g., `focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none`) to ensure keyboard users can easily track their current position.
