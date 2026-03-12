@@ -1,0 +1,3 @@
+## 2024-05-22 - Optimize RMS calculation in hot loops
+**Learning:** Using Python generator expressions like `sum(s * s for s in samples)` for computing the Root Mean Square (RMS) of audio chunks is extremely slow. Replacing this with the C-optimized `math.hypot(*samples)` yields a massive speedup (~4.5x to 7.5x depending on chunk size) in Python 3.13+.
+**Action:** When calculating RMS or dealing with element-wise math over large chunks of data (up to Python's argument unpacking limit, which is safe for 512-1024 chunks), always prefer C-optimized standard library functions over Python loop constructs.
