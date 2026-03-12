@@ -1,0 +1,3 @@
+## 2024-03-22 - Semantic HTML for Keyboard Navigation
+**Learning:** `<a>` tags without an `href` attribute are not inherently focusable by keyboard, breaking accessibility. Using semantic `<button>` elements is necessary for custom navigation controls. Additionally, stateful icon-only buttons need their `aria-label` updated dynamically to match their current state (e.g. Show/Hide password) rather than just updating visual icons.
+**Action:** Always use `<button>` instead of `<a>` for clickable elements that do not navigate to a new URL, and dynamically update `aria-label`s on icon-only toggle buttons using Javascript.
