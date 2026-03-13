@@ -1,7 +1,6 @@
 """pywebview API 桥接 - 将 Python 后端暴露给前端 JS"""
 
 import logging
-import threading
 from dataclasses import asdict
 
 import keyboard

@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
-from typing import Optional, List
+from typing import List
 
 # 开发模式：每次启动强制使用代码中的最新提示词
 # 生产模式：仅首次初始化时设置默认提示词，之后用户可自行修改
