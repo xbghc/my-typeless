@@ -4,7 +4,6 @@ import ctypes
 import logging
 import socket
 import threading
-from ctypes import wintypes
 
 logger = logging.getLogger(__name__)
 
