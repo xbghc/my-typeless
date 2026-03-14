@@ -1,0 +1,3 @@
+## 2024-03-14 - Replace <a> tags without href with semantic <button> for keyboard navigation
+**Learning:** `<a>` tags without an `href` attribute are completely ignored by standard browser keyboard navigation (tabbing), breaking accessibility for custom in-page navigation menus (like sidebars and tabs) that rely purely on JavaScript click events.
+**Action:** When creating in-page navigation links that act as interactive triggers rather than document hyperlinks, always use semantic `<button>` elements (e.g., `<button class="nav-item">`) to ensure native keyboard focusability, and apply standardized focus visible styles (e.g., `focus-visible:ring-2`).
