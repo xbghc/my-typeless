@@ -1,0 +1,3 @@
+## 2024-05-18 - Optimized audio RMS calculation
+**Learning:** For small unpacked tuples (e.g. 512 elements from `struct.unpack`), using `math.hypot(*samples) / math.sqrt(count)` is significantly faster (around ~4-5x) than evaluating a generator expression `math.sqrt(sum(s * s for s in samples) / count)` because it pushes the loop down to C code.
+**Action:** When computing sum of squares or Euclidean distances over arrays unpacked into Python tuples where size is within stack limits (e.g. 512), use `math.hypot(*samples)` instead of generator loops for better performance.
