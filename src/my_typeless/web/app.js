@@ -151,9 +151,13 @@ function togglePasswordVisibility(btn) {
     if (input.type === 'password') {
         input.type = 'text';
         icon.textContent = 'visibility_off';
+        btn.setAttribute('aria-label', 'Hide password');
+        btn.title = 'Hide password';
     } else {
         input.type = 'password';
         icon.textContent = 'visibility';
+        btn.setAttribute('aria-label', 'Show password');
+        btn.title = 'Show password';
     }
 }
 
