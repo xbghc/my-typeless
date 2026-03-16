@@ -1,0 +1,3 @@
+## 2024-05-20 - Optimize RMS calculation in audio processing loop
+**Learning:** When calculating the root mean square (RMS) or similar operations over an array of numbers in Python hot loops (like processing frequent audio chunks), using the C-optimized `math.hypot(*samples)` function is significantly faster than using Python generator expressions like `sum(s * s for s in samples)`.
+**Action:** Always consider using built-in C-optimized functions from libraries like `math` or `numpy` for mathematical operations over arrays in performance-critical sections to bypass Python's interpreter overhead.
