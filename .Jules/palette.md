@@ -1,0 +1,3 @@
+## 2024-11-20 - Use semantic buttons for in-page navigation
+**Learning:** Using `<a>` tags without `href` attributes for in-page navigation (like sidebars and tabs) creates accessibility issues because they aren't natively focusable by keyboard, breaking tab order and interaction for screen reader users.
+**Action:** Always use semantic `<button>` elements instead of empty `<a>` tags for interactive items that trigger JavaScript functions rather than navigating to a new URL, and pair them with proper focus-visible classes.
