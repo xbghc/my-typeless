@@ -1,0 +1,3 @@
+## 2024-05-18 - Optimize Audio RMS calculation
+**Learning:** Computing root mean square of audio samples is significantly faster using Python's `math.hypot` instead of a list/generator comprehension. However, Python has limits on argument unpacking size, so passing `*samples` for lists longer than 512 elements could hit the CPython evaluation stack exhaustion. It's safe to evaluate hypot in chunks of 512.
+**Action:** When working on numerical optimizations for sequence unpacking (e.g. `math.hypot(*samples)`), implement a chunking mechanism (e.g. max 512 elements per chunk) to avoid hitting stack exhaustion on massive byte/sample arrays while maintaining the C-optimized speedup.
