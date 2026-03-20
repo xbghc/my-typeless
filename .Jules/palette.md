@@ -1,0 +1,3 @@
+## 2024-05-14 - Semantic Navigation Buttons
+**Learning:** In-page navigation items acting as tabs or state togglers should use semantic `<button>` elements instead of `<a>` tags without `href` attributes. `<a>` tags without `href` attributes are not natively focusable by the keyboard, hindering accessibility.
+**Action:** When creating sidebar navigation or tabbed interfaces that do not navigate to a new URL, utilize `<button>` elements and apply standard focus-visible styles (e.g., `focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none`) to ensure clear visual feedback for keyboard users.
