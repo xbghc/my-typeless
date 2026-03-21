@@ -1,0 +1,3 @@
+## 2024-05-18 - Dynamic ARIA labels for stateful icons and checkboxes
+**Learning:** Icon-only buttons that toggle state (like visibility toggles) and dynamic lists of checkboxes require dynamic `aria-label` attributes to ensure screen readers announce the correct context and state changes to the user, rather than relying solely on static HTML attributes.
+**Action:** Always explicitly update the `aria-label` and `title` attributes in JavaScript handlers when toggling UI states or rendering dynamic lists of interactive elements.
