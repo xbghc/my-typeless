@@ -1,0 +1,3 @@
+## 2024-05-24 - Audio RMS Calculation
+**Learning:** In `src/my_typeless/recorder.py`, calculating RMS (Root Mean Square) energy of audio chunks is a hot loop, happening constantly during recording to detect silence. The original implementation used a generator expression `sum(s * s for s in samples)`, which is slow. Using C-optimized `math.hypot(*samples) / math.sqrt(count)` is significantly faster. CPython supports unpacking up to a very large number of arguments, but for chunks up to 1024-4096 it's perfectly safe and extremely fast (~2x to 5x faster). The `CHUNK_SIZE` in the code is 1024 bytes / 2 bytes = 512 count.
+**Action:** Use `math.hypot(*samples) / math.sqrt(count)` for calculating RMS of small audio arrays instead of generator expressions.
