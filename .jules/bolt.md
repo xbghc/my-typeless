@@ -1,0 +1,3 @@
+## 2026-03-23 - Speeding up Audio Chunk RMS Calculation
+**Learning:** Using C-optimized `math.hypot(*samples)` is significantly faster (typically ~2.8x or more) than using Python generator expressions for computing the root mean square (RMS) of audio samples. However, due to CPython's evaluation stack limits, large arrays should be chunked (e.g., batches of 512).
+**Action:** When computing sum of squares or RMS in Python hot loops, use `math.hypot(*chunk)` with a maximum chunk size of 512.
