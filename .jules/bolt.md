@@ -1,0 +1,3 @@
+## 2026-03-24 - Optimize RMS Calculation with math.hypot
+**Learning:** Using Python generator expressions for hot loops like calculating root mean square (RMS) of audio samples (`sum(s * s for s in samples)`) is slow. Replacing it with `math.hypot` is significantly faster because it is implemented in C. However, unpacking large arrays (e.g., `*samples`) can hit CPython's evaluation stack limits (safe up to ~512 elements).
+**Action:** When calculating Euclidean norms or RMS, use `math.hypot(*samples)`. For arrays larger than 512 elements, chunk the evaluation (e.g., `sum(math.hypot(*samples[i:i+512])**2 for i in range(0, len(samples), 512))`) to maintain C-optimized speedups while avoiding stack exhaustion.

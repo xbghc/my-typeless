@@ -145,7 +145,9 @@ class Recorder:
         if count == 0:
             return 0.0
         samples = struct.unpack(f"<{count}h", data)
-        sum_sq = sum(s * s for s in samples)
+        # Using math.hypot(*samples) is fast but limited by stack size
+        # Chunk the evaluation to avoid stack exhaustion
+        sum_sq = sum(math.hypot(*samples[i:i+512])**2 for i in range(0, count, 512))
         return math.sqrt(sum_sq / count)
 
     @staticmethod
