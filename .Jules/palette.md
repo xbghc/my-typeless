@@ -1,0 +1,3 @@
+## 2026-03-26 - Semantic Buttons and Dynamic ARIA Labels
+**Learning:** In-page navigation (`<a>` without `href`) should use semantic `<button>` elements with `w-full text-left` to maintain block layout and native keyboard focusability. Also, icon-only toggle buttons must dynamically update their `aria-label` and `title` attributes (e.g., Show/Hide password) to reflect their state for screen reader accessibility, alongside standard HTML attributes.
+**Action:** Always use `<button>` for non-navigating actions and ensure dynamic JavaScript updates ARIA attributes when state changes, adding `focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none` for standardized focus states.
