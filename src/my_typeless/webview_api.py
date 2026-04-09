@@ -155,15 +155,15 @@ class SettingsAPI:
 
         hook = keyboard.hook(on_key, suppress=False)
 
-    def test_stt_connection(self, stt_override: dict | None = None) -> dict:
+    def test_stt_connection(self, provider_config: dict | None = None) -> dict:
         """测试 STT API 连接"""
         try:
-            if not stt_override:
+            if not provider_config:
                 return {"success": False, "error": "No credentials provided for testing"}
 
-            base_url = stt_override.get("base_url")
-            api_key = stt_override.get("api_key")
-            model = stt_override.get("model")
+            base_url = provider_config.get("base_url")
+            api_key = provider_config.get("api_key")
+            model = provider_config.get("model")
 
             if not base_url or not api_key or not model:
                 return {"success": False, "error": "Base URL, API Key, and Model are required for testing"}
@@ -175,15 +175,15 @@ class SettingsAPI:
             logger.error("STT connection test failed: %s", e)
             return {"success": False, "error": str(e)}
 
-    def test_llm_connection(self, llm_override: dict | None = None) -> dict:
+    def test_llm_connection(self, provider_config: dict | None = None) -> dict:
         """测试 LLM API 连接"""
         try:
-            if not llm_override:
+            if not provider_config:
                 return {"success": False, "error": "No credentials provided for testing"}
 
-            base_url = llm_override.get("base_url")
-            api_key = llm_override.get("api_key")
-            model = llm_override.get("model")
+            base_url = provider_config.get("base_url")
+            api_key = provider_config.get("api_key")
+            model = provider_config.get("model")
 
             if not base_url or not api_key or not model:
                 return {"success": False, "error": "Base URL, API Key, and Model are required for testing"}
