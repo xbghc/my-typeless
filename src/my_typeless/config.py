@@ -44,6 +44,7 @@ class ProviderConfig:
     base_url: str
     api_key: str
     models: List[str] = field(default_factory=list)
+    provider_type: str = field(default="openai")
 
 
 @dataclass

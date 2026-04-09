@@ -1,6 +1,7 @@
-"""LLM 文本精修客户端 - 使用 OpenAI 兼容 API"""
+"""LLM 文本精修客户端 - 支持 OpenAI 兼容 API 和 Anthropic API"""
 
 from openai import OpenAI
+from anthropic import Anthropic
 from my_typeless.config import LLMConfig
 
 
@@ -9,10 +10,15 @@ class LLMClient:
 
     def __init__(self, config: LLMConfig):
         self._config = config
-        self._client = OpenAI(
-            base_url=config.active_provider.base_url if config.active_provider else '',
-            api_key=config.active_provider.api_key if config.active_provider else '',
-        )
+        self._provider_type = config.active_provider.provider_type if config.active_provider else 'openai'
+
+        base_url = config.active_provider.base_url if config.active_provider else ''
+        api_key = config.active_provider.api_key if config.active_provider else ''
+
+        if self._provider_type == 'anthropic':
+            self._client = Anthropic(api_key=api_key, base_url=base_url if base_url else None)
+        else:
+            self._client = OpenAI(base_url=base_url, api_key=api_key)
 
     def refine(self, raw_text: str, system_prompt: str = "", context: str = "") -> str:
         """
@@ -38,11 +44,22 @@ class LLMClient:
         else:
             user_message = raw_text
 
-        response = self._client.chat.completions.create(
-            model=self._config.active_model,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": user_message},
-            ],
-        )
-        return response.choices[0].message.content or raw_text
+        if self._provider_type == 'anthropic':
+            response = self._client.messages.create(
+                model=self._config.active_model,
+                system=prompt,
+                messages=[
+                    {"role": "user", "content": user_message},
+                ],
+                max_tokens=4096,
+            )
+            return response.content[0].text or raw_text
+        else:
+            response = self._client.chat.completions.create(
+                model=self._config.active_model,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": user_message},
+                ],
+            )
+            return response.choices[0].message.content or raw_text
