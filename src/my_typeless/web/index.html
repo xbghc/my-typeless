@@ -134,30 +134,57 @@
         <header class="flex items-center justify-between px-8 pt-8 pb-6">
             <h2 class="text-primary text-2xl font-bold tracking-tight">Speech-to-Text</h2>
             <div class="flex items-center gap-3">
-                <button class="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors text-gray-700" onclick="testSttConnection()">
-                    <span class="material-symbols-outlined text-[16px]">link</span>
-                    Test Connection
-                </button>
-                <span id="sttStatusBadge" class="px-2.5 py-1 bg-border-gray rounded-full text-[10px] font-bold text-primary tracking-wider">INACTIVE</span>
+
+
             </div>
         </header>
-        <div class="px-8 flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar pb-20">
-            <div class="flex flex-col gap-2">
-                <label class="text-primary text-sm font-semibold">API Base URL</label>
-                <input class="w-full h-11 px-4 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="sttUrl" placeholder="https://api.example.com/v1" type="text"/>
-            </div>
-            <div class="flex flex-col gap-2">
-                <label class="text-primary text-sm font-semibold">API Key</label>
-                <div class="relative">
-                    <input class="w-full h-11 px-4 pr-10 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="sttKey" placeholder="sk-..." type="password"/>
-                    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary" onclick="togglePasswordVisibility(this)">
-                        <span class="material-symbols-outlined text-[20px]">visibility</span>
-                    </button>
+        <div class="px-8 flex-1 flex flex-col gap-8 overflow-y-auto custom-scrollbar pb-20">
+            <!-- Active Configuration -->
+            <div class="grid grid-cols-2 gap-4 bg-white p-5 rounded-xl border border-gray-200">
+                <div class="flex flex-col gap-2">
+                    <label class="text-primary text-sm font-semibold">Active Provider</label>
+                    <div class="relative">
+                        <select id="sttActiveProvider" onchange="onSttProviderChange()" class="w-full h-11 pl-4 pr-10 rounded-lg border border-border-gray bg-white text-primary text-sm appearance-none focus:border-primary focus:ring-0 outline-none transition-all cursor-pointer">
+                            <option>Loading...</option>
+                        </select>
+                        <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">expand_more</span>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label class="text-primary text-sm font-semibold">Active Model</label>
+                    <div class="relative">
+                        <select id="sttActiveModel" class="w-full h-11 pl-4 pr-10 rounded-lg border border-border-gray bg-white text-primary text-sm appearance-none focus:border-primary focus:ring-0 outline-none transition-all cursor-pointer">
+                            <option>Loading...</option>
+                        </select>
+                        <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">expand_more</span>
+                    </div>
                 </div>
             </div>
-            <div class="flex flex-col gap-2">
-                <label class="text-primary text-sm font-semibold">Model Name</label>
-                <input class="w-full h-11 px-4 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="sttModel" placeholder="whisper-large-v3" type="text"/>
+
+            <!-- Provider Management -->
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-primary text-lg font-bold">Manage Providers</h3>
+                    <button onclick="openProviderModal('stt')" class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">add</span>
+                        New Provider
+                    </button>
+                </div>
+                <div class="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-gray-50 border-b border-gray-200 text-text-muted text-xs uppercase tracking-wider">
+                            <tr>
+                                <th class="px-6 py-3 font-medium">Provider</th>
+                                <th class="px-6 py-3 font-medium">Base URL</th>
+                                <th class="px-6 py-3 font-medium">Models</th>
+                                <th class="px-6 py-3 font-medium text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sttProviderList" class="divide-y divide-gray-100">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -170,10 +197,7 @@
                 <p class="text-gray-400 text-xs">Configure your AI model settings</p>
             </div>
             <div class="flex items-center gap-3">
-                <button class="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors text-gray-700" onclick="testLlmConnection()">
-                    <span class="material-symbols-outlined text-[16px]">link</span>
-                    Test Connection
-                </button>
+
                 <span id="llmStatusBadge" class="px-2.5 py-1 bg-primary text-white text-[10px] font-bold rounded tracking-widest">ACTIVE</span>
             </div>
         </header>
@@ -299,6 +323,57 @@
     </footer>
 
 </main>
+
+    <!-- ══════════ Provider Modal ══════════ -->
+    <div id="providerModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden flex items-center justify-center opacity-0 transition-opacity duration-200">
+        <div class="bg-white rounded-2xl shadow-2xl w-[480px] overflow-hidden transform scale-95 transition-transform duration-200" id="providerModalContent">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="text-lg font-bold text-primary" id="providerModalTitle">Add Provider</h3>
+                <button onclick="closeProviderModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6 flex flex-col gap-5">
+                <input type="hidden" id="modalProviderType">
+                <input type="hidden" id="modalProviderId">
+                <div class="flex flex-col gap-2">
+                    <label class="text-primary text-sm font-semibold">Provider Name</label>
+                    <input class="w-full h-11 px-4 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="modalProviderName" placeholder="e.g. Minimax" type="text"/>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label class="text-primary text-sm font-semibold">Base URL</label>
+                    <input class="w-full h-11 px-4 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="modalProviderUrl" placeholder="https://api.minimax.chat/v1" type="text"/>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label class="text-primary text-sm font-semibold">API Key</label>
+                    <div class="relative">
+                        <input class="w-full h-11 px-4 pr-10 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="modalProviderKey" placeholder="sk-..." type="password"/>
+                        <button class="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary" onclick="togglePasswordVisibility(this)">
+                            <span class="material-symbols-outlined text-[20px]">visibility</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label class="text-primary text-sm font-semibold">Models</label>
+                    <div class="w-full p-2 rounded-lg border border-border-gray bg-white flex flex-wrap gap-2 items-center min-h-[44px] focus-within:border-primary transition-all cursor-text" onclick="document.getElementById('modalModelInput').focus()">
+                        <div id="modalModelsContainer" class="flex flex-wrap gap-2 items-center"></div>
+                        <input class="flex-1 min-w-[100px] h-7 bg-transparent border-none text-primary text-sm outline-none placeholder:text-placeholder-gray px-1 focus:ring-0" id="modalModelInput" placeholder="Add model & press Enter" onkeydown="handleModelInputKeyDown(event)"/>
+                    </div>
+                </div>
+            </div>
+                        <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center gap-3">
+                <button id="modalTestBtn" onclick="testModalConnection()" class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors text-primary disabled:opacity-50">
+                    <span class="material-symbols-outlined text-[16px]">link</span>
+                    Test Connection
+                </button>
+                <div class="flex items-center gap-3">
+                    <button onclick="closeProviderModal()" class="px-5 py-2 rounded-lg font-semibold text-sm text-gray-600 hover:bg-gray-200 transition-colors">Cancel</button>
+                    <button onclick="saveProviderModal()" class="px-5 py-2 rounded-lg font-semibold text-sm bg-primary text-white hover:bg-gray-800 transition-colors">Save Provider</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 <script src="app.js"></script>
 </body>
