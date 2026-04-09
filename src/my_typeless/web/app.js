@@ -167,11 +167,12 @@ function togglePasswordVisibility(btn) {
 async function testModalConnection() {
     const btn = document.getElementById('modalTestBtn');
     const type = document.getElementById('modalProviderType').value;
+    const apiType = document.getElementById('modalProviderApiType').value;
     const url = document.getElementById('modalProviderUrl').value.trim();
     const key = document.getElementById('modalProviderKey').value.trim();
 
-    if (!url || !key) {
-        alert('Base URL and API Key are required to test connection.');
+    if ((!url && apiType !== 'anthropic') || !key) {
+        alert('API Key (and Base URL for OpenAI) are required to test connection.');
         return;
     }
 
@@ -188,7 +189,7 @@ async function testModalConnection() {
 
     try {
         let result;
-        const payload = { base_url: url, api_key: key, model: model };
+        const payload = { base_url: url, api_key: key, model: model, provider_type: apiType };
 
         if (type === 'stt') {
             result = await pywebview.api.test_stt_connection(payload);

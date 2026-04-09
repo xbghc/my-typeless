@@ -337,6 +337,13 @@
                 <input type="hidden" id="modalProviderType">
                 <input type="hidden" id="modalProviderId">
                 <div class="flex flex-col gap-2">
+                    <label class="text-primary text-sm font-semibold">Type</label>
+                    <select id="modalProviderApiType" class="w-full h-11 px-4 rounded-lg border border-border-gray bg-white text-primary text-sm focus:border-primary focus:ring-0 outline-none transition-all cursor-pointer">
+                        <option value="openai">OpenAI (Compatible)</option>
+                        <option value="anthropic">Anthropic</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-2">
                     <label class="text-primary text-sm font-semibold">Provider Name</label>
                     <input class="w-full h-11 px-4 rounded-lg border border-border-gray bg-white text-primary text-sm placeholder:text-placeholder-gray focus:border-primary focus:ring-0 outline-none transition-all" id="modalProviderName" placeholder="e.g. Minimax" type="text"/>
                 </div>

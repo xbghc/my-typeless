@@ -155,8 +155,8 @@ class SettingsAPI:
 
         hook = keyboard.hook(on_key, suppress=False)
 
-    def _test_openai_client_connection(self, provider_config: dict | None, service_name: str) -> dict:
-        """通用的 OpenAI 兼容客户端连接测试辅助方法"""
+    def _test_client_connection(self, provider_config: dict | None, service_name: str) -> dict:
+        """通用的 API 客户端连接测试辅助方法"""
         try:
             if not provider_config:
                 return {"success": False, "error": "No credentials provided for testing"}
@@ -164,12 +164,26 @@ class SettingsAPI:
             base_url = provider_config.get("base_url")
             api_key = provider_config.get("api_key")
             model = provider_config.get("model")
+            provider_type = provider_config.get("provider_type", "openai")
 
-            if not base_url or not api_key or not model:
-                return {"success": False, "error": "Base URL, API Key, and Model are required for testing"}
+            if not api_key or not model:
+                return {"success": False, "error": "API Key and Model are required for testing"}
 
-            client = OpenAI(base_url=base_url, api_key=api_key)
-            client.models.retrieve(model)
+            if provider_type == 'anthropic':
+                from anthropic import Anthropic
+                client = Anthropic(api_key=api_key, base_url=base_url if base_url else None)
+                # Anthropic doesn't have a simple models.retrieve endpoint, test by making a minimal call
+                client.messages.create(
+                    model=model,
+                    max_tokens=1,
+                    messages=[{"role": "user", "content": "test"}]
+                )
+            else:
+                if not base_url:
+                     return {"success": False, "error": "Base URL is required for OpenAI compatible providers"}
+                client = OpenAI(base_url=base_url, api_key=api_key)
+                client.models.retrieve(model)
+
             return {"success": True}
         except Exception as e:
             logger.error("%s connection test failed: %s", service_name, e)
@@ -177,11 +191,11 @@ class SettingsAPI:
 
     def test_stt_connection(self, provider_config: dict | None = None) -> dict:
         """测试 STT API 连接"""
-        return self._test_openai_client_connection(provider_config, "STT")
+        return self._test_client_connection(provider_config, "STT")
 
     def test_llm_connection(self, provider_config: dict | None = None) -> dict:
         """测试 LLM API 连接"""
-        return self._test_openai_client_connection(provider_config, "LLM")
+        return self._test_client_connection(provider_config, "LLM")
 
 
     def close_window(self) -> None:
