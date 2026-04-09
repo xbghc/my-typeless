@@ -164,11 +164,7 @@ async function testSttConnection() {
     badge.textContent = 'TESTING...';
     badge.className = 'px-2.5 py-1 bg-gray-300 text-primary text-[10px] font-bold rounded tracking-widest';
     try {
-        const result = await pywebview.api.test_stt_connection({
-            base_url: document.getElementById('sttUrl').value.trim(),
-            api_key: document.getElementById('sttKey').value.trim(),
-            model: document.getElementById('sttModel').value.trim(),
-        });
+        const result = await pywebview.api.test_stt_connection();
         updateStatusBadge('sttStatusBadge', result.success);
         if (!result.success) alert('STT Connection failed: ' + (result.error || 'Unknown'));
     } catch (e) {
@@ -176,23 +172,21 @@ async function testSttConnection() {
         alert('STT Connection failed: ' + e);
     }
 }
+}
 
 async function testLlmConnection() {
     const badge = document.getElementById('llmStatusBadge');
     badge.textContent = 'TESTING...';
     badge.className = 'px-2.5 py-1 bg-gray-300 text-primary text-[10px] font-bold rounded tracking-widest';
     try {
-        const result = await pywebview.api.test_llm_connection({
-            base_url: document.getElementById('llmUrl').value.trim(),
-            api_key: document.getElementById('llmKey').value.trim(),
-            model: document.getElementById('llmModel').value.trim(),
-        });
+        const result = await pywebview.api.test_llm_connection();
         updateStatusBadge('llmStatusBadge', result.success);
         if (!result.success) alert('LLM Connection failed: ' + (result.error || 'Unknown'));
     } catch (e) {
         updateStatusBadge('llmStatusBadge', false);
         alert('LLM Connection failed: ' + e);
     }
+}
 }
 
 // ── Glossary ──
@@ -259,12 +253,7 @@ async function runTest() {
         return;
     }
 
-    const llmOverride = {
-        base_url: document.getElementById('llmUrl').value.trim(),
-        api_key: document.getElementById('llmKey').value.trim(),
-        model: document.getElementById('llmModel').value.trim(),
-        prompt: document.getElementById('llmPrompt').value.trim(),
-    };
+    const llmOverride = null; // Will use active backend config implicitly
 
     runBtn.disabled = true;
     runBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Running...';
@@ -382,4 +371,241 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+
+// ── Provider Management ──
+
+function generateId() {
+    return Math.random().toString(36).substring(2, 15);
+}
+
+function renderProviderDropdown(type) {
+    const providers = type === 'stt' ? sttProviders : llmProviders;
+    const activeId = type === 'stt' ? activeSttProviderId : activeLlmProviderId;
+    const activeModel = type === 'stt' ? activeSttModel : activeLlmModel;
+
+    const providerSelect = document.getElementById(`${type}ActiveProvider`);
+    const modelSelect = document.getElementById(`${type}ActiveModel`);
+
+    providerSelect.innerHTML = providers.map(p =>
+        `<option value="${escapeHtml(p.id)}" ${p.id === activeId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+    ).join('');
+
+    if (providers.length === 0) {
+        providerSelect.innerHTML = '<option value="">No providers</option>';
+        modelSelect.innerHTML = '<option value="">N/A</option>';
+        return;
+    }
+
+    updateModelDropdown(type, activeId, activeModel);
+}
+
+function updateModelDropdown(type, providerId, selectedModel) {
+    const providers = type === 'stt' ? sttProviders : llmProviders;
+    const provider = providers.find(p => p.id === providerId);
+    const modelSelect = document.getElementById(`${type}ActiveModel`);
+
+    if (!provider || !provider.models || provider.models.length === 0) {
+        modelSelect.innerHTML = '<option value="">No models</option>';
+        return;
+    }
+
+    modelSelect.innerHTML = provider.models.map(m =>
+        `<option value="${escapeHtml(m)}" ${m === selectedModel ? 'selected' : ''}>${escapeHtml(m)}</option>`
+    ).join('');
+}
+
+function onSttProviderChange() {
+    const id = document.getElementById('sttActiveProvider').value;
+    updateModelDropdown('stt', id, null);
+    activeSttProviderId = id;
+}
+
+function onLlmProviderChange() {
+    const id = document.getElementById('llmActiveProvider').value;
+    updateModelDropdown('llm', id, null);
+    activeLlmProviderId = id;
+}
+
+function renderProviderList(type) {
+    const providers = type === 'stt' ? sttProviders : llmProviders;
+    const list = document.getElementById(`${type}ProviderList`);
+
+    if (providers.length === 0) {
+        list.innerHTML = `<tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">No providers configured. Click "New Provider" to add one.</td></tr>`;
+        return;
+    }
+
+    list.innerHTML = providers.map(p => {
+        const maskedKey = p.api_key ? '••••••••' : 'None';
+        const modelsHtml = p.models.map(m => `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">${escapeHtml(m)}</span>`).join(' ');
+
+        return `
+            <tr class="hover:bg-gray-50 transition-colors group">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="font-semibold text-primary">${escapeHtml(p.name)}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500 font-mono text-xs">
+                    ${escapeHtml(p.base_url)}
+                </td>
+                <td class="px-6 py-4">
+                    <div class="flex flex-wrap gap-1">
+                        ${modelsHtml || '<span class="text-gray-400 text-xs italic">No models</span>'}
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="editProvider('${type}', '${escapeHtml(p.id)}')" class="p-1 text-gray-400 hover:text-primary transition-colors" title="Edit">
+                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                        </button>
+                        <button onclick="deleteProvider('${type}', '${escapeHtml(p.id)}')" class="p-1 text-gray-400 hover:text-red-600 transition-colors" title="Delete">
+                            <span class="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// ── Modal Logic ──
+
+function openProviderModal(type, providerId = null) {
+    document.getElementById('modalProviderType').value = type;
+    document.getElementById('providerModalTitle').textContent = providerId ? 'Edit Provider' : 'Add Provider';
+
+    const providers = type === 'stt' ? sttProviders : llmProviders;
+    let provider = providerId ? providers.find(p => p.id === providerId) : null;
+
+    document.getElementById('modalProviderId').value = providerId || '';
+    document.getElementById('modalProviderName').value = provider ? provider.name : '';
+    document.getElementById('modalProviderUrl').value = provider ? provider.base_url : '';
+    document.getElementById('modalProviderKey').value = provider ? provider.api_key : '';
+
+    const keyInput = document.getElementById('modalProviderKey');
+    const icon = keyInput.nextElementSibling.querySelector('.material-symbols-outlined');
+    keyInput.type = 'password';
+    icon.textContent = 'visibility';
+
+    modalModels = provider ? [...provider.models] : [];
+    renderModalModels();
+
+    const modal = document.getElementById('providerModal');
+    const content = document.getElementById('providerModalContent');
+
+    modal.classList.remove('hidden');
+    // small delay to allow display:block to apply before animation
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        content.classList.remove('scale-95');
+    }, 10);
+}
+
+function closeProviderModal() {
+    const modal = document.getElementById('providerModal');
+    const content = document.getElementById('providerModalContent');
+
+    modal.classList.add('opacity-0');
+    content.classList.add('scale-95');
+
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 200);
+}
+
+function renderModalModels() {
+    const container = document.getElementById('modalModelsContainer');
+    container.innerHTML = modalModels.map((m, i) => `
+        <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-sm font-medium text-primary">
+            ${escapeHtml(m)}
+            <button onclick="removeModalModel(${i})" class="text-gray-400 hover:text-red-500 rounded-full flex items-center justify-center p-0.5">
+                <span class="material-symbols-outlined text-[14px]">close</span>
+            </button>
+        </div>
+    `).join('');
+}
+
+function handleModelInputKeyDown(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const input = document.getElementById('modalModelInput');
+        const val = input.value.trim();
+        if (val && !modalModels.includes(val)) {
+            modalModels.push(val);
+            renderModalModels();
+            input.value = '';
+        }
+    } else if (e.key === 'Backspace' && document.getElementById('modalModelInput').value === '' && modalModels.length > 0) {
+        modalModels.pop();
+        renderModalModels();
+    }
+}
+
+function removeModalModel(index) {
+    modalModels.splice(index, 1);
+    renderModalModels();
+}
+
+async function saveProviderModal() {
+    const type = document.getElementById('modalProviderType').value;
+    const id = document.getElementById('modalProviderId').value || generateId();
+    const name = document.getElementById('modalProviderName').value.trim();
+    const url = document.getElementById('modalProviderUrl').value.trim();
+    const key = document.getElementById('modalProviderKey').value.trim();
+
+    if (!name || !url) {
+        alert('Name and Base URL are required.');
+        return;
+    }
+
+    const newProvider = {
+        id: id,
+        name: name,
+        base_url: url,
+        api_key: key,
+        models: [...modalModels]
+    };
+
+    const providers = type === 'stt' ? sttProviders : llmProviders;
+    const existingIndex = providers.findIndex(p => p.id === id);
+
+    if (existingIndex >= 0) {
+        providers[existingIndex] = newProvider;
+    } else {
+        providers.push(newProvider);
+    }
+
+    renderProviderList(type);
+    renderProviderDropdown(type);
+    closeProviderModal();
+
+    // Auto-save
+    await applyConfig();
+}
+
+async function deleteProvider(type, id) {
+    if (!confirm('Are you sure you want to delete this provider?')) return;
+
+    if (type === 'stt') {
+        sttProviders = sttProviders.filter(p => p.id !== id);
+        if (activeSttProviderId === id) {
+            activeSttProviderId = sttProviders.length > 0 ? sttProviders[0].id : '';
+        }
+    } else {
+        llmProviders = llmProviders.filter(p => p.id !== id);
+        if (activeLlmProviderId === id) {
+            activeLlmProviderId = llmProviders.length > 0 ? llmProviders[0].id : '';
+        }
+    }
+
+    renderProviderList(type);
+    renderProviderDropdown(type);
+
+    // Auto-save
+    await applyConfig();
+}
+
+function editProvider(type, id) {
+    openProviderModal(type, id);
 }

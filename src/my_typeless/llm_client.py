@@ -10,8 +10,8 @@ class LLMClient:
     def __init__(self, config: LLMConfig):
         self._config = config
         self._client = OpenAI(
-            base_url=config.base_url,
-            api_key=config.api_key,
+            base_url=config.active_provider.base_url if config.active_provider else '',
+            api_key=config.active_provider.api_key if config.active_provider else '',
         )
 
     def refine(self, raw_text: str, system_prompt: str = "", context: str = "") -> str:
@@ -39,7 +39,7 @@ class LLMClient:
             user_message = raw_text
 
         response = self._client.chat.completions.create(
-            model=self._config.model,
+            model=self._config.active_model,
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": user_message},

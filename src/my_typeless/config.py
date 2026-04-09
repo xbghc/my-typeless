@@ -36,20 +36,60 @@ DEFAULT_LLM_PROMPT = (
 )
 
 
+
+@dataclass
+class ProviderConfig:
+    id: str
+    name: str
+    base_url: str
+    api_key: str
+    models: List[str] = field(default_factory=list)
+
+
 @dataclass
 class STTConfig:
-    base_url: str = "https://api.groq.com/openai/v1"
-    api_key: str = ""
-    model: str = "whisper-large-v3"
+    providers: List[ProviderConfig] = field(default_factory=lambda: [
+        ProviderConfig(
+            id="default-stt",
+            name="Groq",
+            base_url="https://api.groq.com/openai/v1",
+            api_key="",
+            models=["whisper-large-v3"]
+        )
+    ])
+    active_provider_id: str = "default-stt"
+    active_model: str = "whisper-large-v3"
     language: str = ""  # 语言代码（如 "zh"），留空则自动检测
+
+    @property
+    def active_provider(self) -> Optional[ProviderConfig]:
+        for p in self.providers:
+            if p.id == self.active_provider_id:
+                return p
+        return self.providers[0] if self.providers else None
 
 
 @dataclass
 class LLMConfig:
-    base_url: str = "https://api.deepseek.com/v1"
-    api_key: str = ""
-    model: str = "deepseek-chat"
+    providers: List[ProviderConfig] = field(default_factory=lambda: [
+        ProviderConfig(
+            id="default-llm",
+            name="DeepSeek",
+            base_url="https://api.deepseek.com/v1",
+            api_key="",
+            models=["deepseek-chat"]
+        )
+    ])
+    active_provider_id: str = "default-llm"
+    active_model: str = "deepseek-chat"
     prompt: str = field(default=DEFAULT_LLM_PROMPT)
+
+    @property
+    def active_provider(self) -> Optional[ProviderConfig]:
+        for p in self.providers:
+            if p.id == self.active_provider_id:
+                return p
+        return self.providers[0] if self.providers else None
 
 
 @dataclass
@@ -89,6 +129,82 @@ class AppConfig:
             config = cls()
             config.save()
             return config
+
+        try:
+            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+
+            # Migration logic for STT
+            stt_data = data.get("stt", {})
+            stt_providers = []
+            if "providers" in stt_data:
+                stt_providers = [ProviderConfig(**p) for p in stt_data["providers"]]
+            elif "base_url" in stt_data:
+                # Migrate legacy STT config
+                stt_providers = [ProviderConfig(
+                    id="migrated-stt",
+                    name="Legacy STT",
+                    base_url=stt_data.get("base_url", "https://api.groq.com/openai/v1"),
+                    api_key=stt_data.get("api_key", ""),
+                    models=[stt_data.get("model", "whisper-large-v3")]
+                )]
+            else:
+                stt_providers = STTConfig().providers
+
+            active_stt_id = stt_data.get("active_provider_id", "migrated-stt" if "base_url" in stt_data and "providers" not in stt_data else "default-stt")
+            active_stt_model = stt_data.get("active_model", stt_data.get("model", "whisper-large-v3"))
+            stt = STTConfig(
+                providers=stt_providers,
+                active_provider_id=active_stt_id,
+                active_model=active_stt_model,
+                language=stt_data.get("language", "")
+            )
+
+            # Migration logic for LLM
+            llm_data = data.get("llm", {})
+            llm_providers = []
+            if "providers" in llm_data:
+                llm_providers = [ProviderConfig(**p) for p in llm_data["providers"]]
+            elif "base_url" in llm_data:
+                # Migrate legacy LLM config
+                llm_providers = [ProviderConfig(
+                    id="migrated-llm",
+                    name="Legacy LLM",
+                    base_url=llm_data.get("base_url", "https://api.deepseek.com/v1"),
+                    api_key=llm_data.get("api_key", ""),
+                    models=[llm_data.get("model", "deepseek-chat")]
+                )]
+            else:
+                llm_providers = LLMConfig().providers
+
+            active_llm_id = llm_data.get("active_provider_id", "migrated-llm" if "base_url" in llm_data and "providers" not in llm_data else "default-llm")
+            active_llm_model = llm_data.get("active_model", llm_data.get("model", "deepseek-chat"))
+            llm = LLMConfig(
+                providers=llm_providers,
+                active_provider_id=active_llm_id,
+                active_model=active_llm_model,
+                prompt=llm_data.get("prompt", DEFAULT_LLM_PROMPT)
+            )
+
+            glossary = data.get("glossary", [])
+            if not isinstance(glossary, list):
+                glossary = []
+
+            config = cls(
+                hotkey=data.get("hotkey", "right alt"),
+                start_with_windows=data.get("start_with_windows", False),
+                stt=stt,
+                llm=llm,
+                glossary=glossary,
+            )
+        except (json.JSONDecodeError, TypeError, KeyError, ValueError):
+            config = cls()
+
+        # 开发模式下强制使用代码中的最新提示词
+        if DEV_MODE:
+            config.llm.prompt = DEFAULT_LLM_PROMPT
+
+        config.save()
+        return config
 
         try:
             data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))

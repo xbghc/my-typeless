@@ -1,14 +1,13 @@
 """pywebview API 桥接 - 将 Python 后端暴露给前端 JS"""
 
 import logging
-import threading
 from dataclasses import asdict
 
 import keyboard
 
 from openai import OpenAI
 
-from my_typeless.config import AppConfig, LLMConfig
+from my_typeless.config import AppConfig
 from my_typeless.history import get_history_page, clear_history, add_history
 from my_typeless.llm_client import LLMClient
 from my_typeless.version import __version__
@@ -50,16 +49,22 @@ class SettingsAPI:
             self._config.start_with_windows = data.get("start_with_windows", False)
 
             stt = data.get("stt", {})
-            self._config.stt.base_url = stt.get("base_url", "")
-            self._config.stt.api_key = stt.get("api_key", "")
-            self._config.stt.model = stt.get("model", "")
-            self._config.stt.language = stt.get("language", "")
+            self._config.stt.active_provider_id = stt.get("active_provider_id", self._config.stt.active_provider_id)
+            self._config.stt.active_model = stt.get("active_model", self._config.stt.active_model)
+            self._config.stt.language = stt.get("language", self._config.stt.language)
+
+            if "providers" in stt:
+                from my_typeless.config import ProviderConfig
+                self._config.stt.providers = [ProviderConfig(**p) for p in stt["providers"]]
 
             llm = data.get("llm", {})
-            self._config.llm.base_url = llm.get("base_url", "")
-            self._config.llm.api_key = llm.get("api_key", "")
-            self._config.llm.model = llm.get("model", "")
-            self._config.llm.prompt = llm.get("prompt", "")
+            self._config.llm.active_provider_id = llm.get("active_provider_id", self._config.llm.active_provider_id)
+            self._config.llm.active_model = llm.get("active_model", self._config.llm.active_model)
+            self._config.llm.prompt = llm.get("prompt", self._config.llm.prompt)
+
+            if "providers" in llm:
+                from my_typeless.config import ProviderConfig
+                self._config.llm.providers = [ProviderConfig(**p) for p in llm["providers"]]
 
             self._config.glossary = data.get("glossary", [])
 
@@ -83,21 +88,35 @@ class SettingsAPI:
     def run_test(self, raw_text: str, llm_override: dict = None) -> dict:
         """测试 LLM 精修"""
         try:
+            llm_config = self._config.llm
+            active_provider = llm_config.active_provider
+            if not active_provider:
+                return {"success": False, "error": "No active LLM provider configured"}
+
+            base_url = active_provider.base_url
+            api_key = active_provider.api_key
+            model = llm_config.active_model
+            prompt = llm_config.prompt
+
             if llm_override:
-                llm_config = LLMConfig(
-                    base_url=llm_override.get("base_url", self._config.llm.base_url),
-                    api_key=llm_override.get("api_key", self._config.llm.api_key),
-                    model=llm_override.get("model", self._config.llm.model),
-                    prompt=llm_override.get("prompt", self._config.llm.prompt),
-                )
-            else:
-                llm_config = self._config.llm
+                base_url = llm_override.get("base_url", base_url)
+                api_key = llm_override.get("api_key", api_key)
+                model = llm_override.get("model", model)
+                prompt = llm_override.get("prompt", prompt)
 
             glossary = self._config.glossary
-            temp_config = AppConfig(llm=llm_config, glossary=glossary)
+            temp_config = AppConfig(glossary=glossary)
+            temp_config.llm.prompt = prompt
             system_prompt = temp_config.build_llm_system_prompt()
 
-            client = LLMClient(llm_config)
+            # We need to temporarily modify the active provider details for LLMClient
+            # Since LLMClient just expects an LLMConfig, we can build a temp one.
+            from my_typeless.config import LLMConfig as ConfigLLMConfig, ProviderConfig
+
+            temp_provider = ProviderConfig(id="temp", name="temp", base_url=base_url, api_key=api_key, models=[model])
+            temp_llm_config = ConfigLLMConfig(providers=[temp_provider], active_provider_id="temp", active_model=model, prompt=prompt)
+
+            client = LLMClient(temp_llm_config)
             result = client.refine(raw_text, system_prompt=system_prompt)
 
             if raw_text.strip() and result:
@@ -139,10 +158,20 @@ class SettingsAPI:
     def test_stt_connection(self, stt_override: dict | None = None) -> dict:
         """测试 STT API 连接"""
         try:
+            active_provider = self._config.stt.active_provider
             cfg = stt_override or {}
-            base_url = cfg.get("base_url") or self._config.stt.base_url
-            api_key = cfg.get("api_key") or self._config.stt.api_key
-            model = cfg.get("model") or self._config.stt.model
+
+            base_url = cfg.get("base_url")
+            api_key = cfg.get("api_key")
+            model = cfg.get("model")
+
+            if not base_url and active_provider:
+                base_url = active_provider.base_url
+            if not api_key and active_provider:
+                api_key = active_provider.api_key
+            if not model:
+                model = self._config.stt.active_model
+
             if not api_key:
                 return {"success": False, "error": "API key is empty"}
             client = OpenAI(base_url=base_url, api_key=api_key)
@@ -155,10 +184,20 @@ class SettingsAPI:
     def test_llm_connection(self, llm_override: dict | None = None) -> dict:
         """测试 LLM API 连接"""
         try:
+            active_provider = self._config.llm.active_provider
             cfg = llm_override or {}
-            base_url = cfg.get("base_url") or self._config.llm.base_url
-            api_key = cfg.get("api_key") or self._config.llm.api_key
-            model = cfg.get("model") or self._config.llm.model
+
+            base_url = cfg.get("base_url")
+            api_key = cfg.get("api_key")
+            model = cfg.get("model")
+
+            if not base_url and active_provider:
+                base_url = active_provider.base_url
+            if not api_key and active_provider:
+                api_key = active_provider.api_key
+            if not model:
+                model = self._config.llm.active_model
+
             if not api_key:
                 return {"success": False, "error": "API key is empty"}
             client = OpenAI(base_url=base_url, api_key=api_key)

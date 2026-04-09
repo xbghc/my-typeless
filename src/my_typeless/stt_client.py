@@ -11,8 +11,8 @@ class STTClient:
     def __init__(self, config: STTConfig):
         self._config = config
         self._client = OpenAI(
-            base_url=config.base_url,
-            api_key=config.api_key,
+            base_url=config.active_provider.base_url if config.active_provider else '',
+            api_key=config.active_provider.api_key if config.active_provider else '',
         )
 
     def transcribe(self, audio_data: bytes, prompt: str = "") -> str:
@@ -31,7 +31,7 @@ class STTClient:
         audio_file.name = "recording.wav"
 
         kwargs = {
-            "model": self._config.model,
+            "model": self._config.active_model,
             "file": audio_file,
         }
         if prompt:
