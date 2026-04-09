@@ -159,35 +159,62 @@ function togglePasswordVisibility(btn) {
 
 // ── Test Connection ──
 
-async function testSttConnection() {
-    const badge = document.getElementById('sttStatusBadge');
-    badge.textContent = 'TESTING...';
-    badge.className = 'px-2.5 py-1 bg-gray-300 text-primary text-[10px] font-bold rounded tracking-widest';
-    try {
-        const result = await pywebview.api.test_stt_connection();
-        updateStatusBadge('sttStatusBadge', result.success);
-        if (!result.success) alert('STT Connection failed: ' + (result.error || 'Unknown'));
-    } catch (e) {
-        updateStatusBadge('sttStatusBadge', false);
-        alert('STT Connection failed: ' + e);
-    }
-}
 }
 
-async function testLlmConnection() {
-    const badge = document.getElementById('llmStatusBadge');
-    badge.textContent = 'TESTING...';
-    badge.className = 'px-2.5 py-1 bg-gray-300 text-primary text-[10px] font-bold rounded tracking-widest';
+
+// ── Test Connection (Provider Modal) ──
+
+async function testModalConnection() {
+    const btn = document.getElementById('modalTestBtn');
+    const type = document.getElementById('modalProviderType').value;
+    const url = document.getElementById('modalProviderUrl').value.trim();
+    const key = document.getElementById('modalProviderKey').value.trim();
+
+    if (!url || !key) {
+        alert('Base URL and API Key are required to test connection.');
+        return;
+    }
+
+    if (modalModels.length === 0) {
+        alert('At least one model must be added to test connection.');
+        return;
+    }
+
+    const model = modalModels[0]; // Test the first model
+
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Testing...';
+
     try {
-        const result = await pywebview.api.test_llm_connection();
-        updateStatusBadge('llmStatusBadge', result.success);
-        if (!result.success) alert('LLM Connection failed: ' + (result.error || 'Unknown'));
+        let result;
+        const payload = { base_url: url, api_key: key, model: model };
+
+        if (type === 'stt') {
+            result = await pywebview.api.test_stt_connection(payload);
+        } else {
+            result = await pywebview.api.test_llm_connection(payload);
+        }
+
+        if (result.success) {
+            btn.innerHTML = '<span class="material-symbols-outlined text-[16px] text-green-500">check_circle</span> Success';
+            setTimeout(() => {
+                if (!btn.disabled) return;
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }, 2000);
+        } else {
+            alert('Connection failed: ' + (result.error || 'Unknown'));
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     } catch (e) {
-        updateStatusBadge('llmStatusBadge', false);
-        alert('LLM Connection failed: ' + e);
+        alert('Connection failed: ' + e);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
     }
 }
-}
+
 
 // ── Glossary ──
 

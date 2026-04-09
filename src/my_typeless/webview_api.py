@@ -158,22 +158,16 @@ class SettingsAPI:
     def test_stt_connection(self, stt_override: dict | None = None) -> dict:
         """测试 STT API 连接"""
         try:
-            active_provider = self._config.stt.active_provider
-            cfg = stt_override or {}
+            if not stt_override:
+                return {"success": False, "error": "No credentials provided for testing"}
 
-            base_url = cfg.get("base_url")
-            api_key = cfg.get("api_key")
-            model = cfg.get("model")
+            base_url = stt_override.get("base_url")
+            api_key = stt_override.get("api_key")
+            model = stt_override.get("model")
 
-            if not base_url and active_provider:
-                base_url = active_provider.base_url
-            if not api_key and active_provider:
-                api_key = active_provider.api_key
-            if not model:
-                model = self._config.stt.active_model
+            if not base_url or not api_key or not model:
+                return {"success": False, "error": "Base URL, API Key, and Model are required for testing"}
 
-            if not api_key:
-                return {"success": False, "error": "API key is empty"}
             client = OpenAI(base_url=base_url, api_key=api_key)
             client.models.retrieve(model)
             return {"success": True}
@@ -184,22 +178,16 @@ class SettingsAPI:
     def test_llm_connection(self, llm_override: dict | None = None) -> dict:
         """测试 LLM API 连接"""
         try:
-            active_provider = self._config.llm.active_provider
-            cfg = llm_override or {}
+            if not llm_override:
+                return {"success": False, "error": "No credentials provided for testing"}
 
-            base_url = cfg.get("base_url")
-            api_key = cfg.get("api_key")
-            model = cfg.get("model")
+            base_url = llm_override.get("base_url")
+            api_key = llm_override.get("api_key")
+            model = llm_override.get("model")
 
-            if not base_url and active_provider:
-                base_url = active_provider.base_url
-            if not api_key and active_provider:
-                api_key = active_provider.api_key
-            if not model:
-                model = self._config.llm.active_model
+            if not base_url or not api_key or not model:
+                return {"success": False, "error": "Base URL, API Key, and Model are required for testing"}
 
-            if not api_key:
-                return {"success": False, "error": "API key is empty"}
             client = OpenAI(base_url=base_url, api_key=api_key)
             client.models.retrieve(model)
             return {"success": True}
