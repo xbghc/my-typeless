@@ -155,8 +155,8 @@ class SettingsAPI:
 
         hook = keyboard.hook(on_key, suppress=False)
 
-    def test_stt_connection(self, provider_config: dict | None = None) -> dict:
-        """测试 STT API 连接"""
+    def _test_openai_client_connection(self, provider_config: dict | None, service_name: str) -> dict:
+        """通用的 OpenAI 兼容客户端连接测试辅助方法"""
         try:
             if not provider_config:
                 return {"success": False, "error": "No credentials provided for testing"}
@@ -172,28 +172,17 @@ class SettingsAPI:
             client.models.retrieve(model)
             return {"success": True}
         except Exception as e:
-            logger.error("STT connection test failed: %s", e)
+            logger.error("%s connection test failed: %s", service_name, e)
             return {"success": False, "error": str(e)}
+
+    def test_stt_connection(self, provider_config: dict | None = None) -> dict:
+        """测试 STT API 连接"""
+        return self._test_openai_client_connection(provider_config, "STT")
 
     def test_llm_connection(self, provider_config: dict | None = None) -> dict:
         """测试 LLM API 连接"""
-        try:
-            if not provider_config:
-                return {"success": False, "error": "No credentials provided for testing"}
+        return self._test_openai_client_connection(provider_config, "LLM")
 
-            base_url = provider_config.get("base_url")
-            api_key = provider_config.get("api_key")
-            model = provider_config.get("model")
-
-            if not base_url or not api_key or not model:
-                return {"success": False, "error": "Base URL, API Key, and Model are required for testing"}
-
-            client = OpenAI(base_url=base_url, api_key=api_key)
-            client.models.retrieve(model)
-            return {"success": True}
-        except Exception as e:
-            logger.error("LLM connection test failed: %s", e)
-            return {"success": False, "error": str(e)}
 
     def close_window(self) -> None:
         """隐藏设置窗口（窗口保持存活供下次打开）"""
