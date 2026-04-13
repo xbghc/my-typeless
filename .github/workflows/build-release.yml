@@ -70,7 +70,7 @@ jobs:
 
       - name: Verify installer
         run: |
-          $setup = "dist/MyTypeless-Setup.exe"
+          $setup = "dist/MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe"
           if (Test-Path $setup) {
             $size = (Get-Item $setup).Length / 1MB
             Write-Host "Installer built! Size: $([math]::Round($size, 2)) MB"
@@ -85,7 +85,7 @@ jobs:
           name: MyTypeless-${{ steps.version.outputs.version }}
           path: |
             dist/MyTypeless.exe
-            dist/MyTypeless-Setup.exe
+            dist/MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe
           retention-days: 30
 
   release:
@@ -127,6 +127,6 @@ jobs:
           generate_release_notes: true
           files: |
             artifacts/MyTypeless.exe
-            artifacts/MyTypeless-Setup.exe
+            artifacts/MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
