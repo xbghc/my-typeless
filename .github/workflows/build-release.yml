@@ -43,7 +43,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install pyinstaller resvg_py
+          # 版本约束与 pyproject.toml [dependency-groups].dev 保持一致
+          pip install "pyinstaller>=6.0" "resvg_py>=0.3"
           pip install .
 
       - name: Update version in source

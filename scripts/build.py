@@ -19,7 +19,12 @@ RESOURCES_DIR = ROOT / "src" / "my_typeless" / "resources"
 
 def _normalize_version(version: str) -> str:
     """去掉可能的 'v'/'V' 前缀，兼容 'v1.2.3' 与 '1.2.3' 两种写法"""
-    return version.lstrip("vV") if version else version
+    if not version:
+        raise ValueError("version must be a non-empty string")
+    normalized = version.lstrip("vV")
+    if not normalized:
+        raise ValueError(f"version contains only 'v' prefix: {version!r}")
+    return normalized
 
 
 def read_version() -> str:

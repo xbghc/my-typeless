@@ -94,7 +94,11 @@ class SignalServer:
                         raise
 
                 if self._running:
-                    self._on_signal()
+                    try:
+                        self._on_signal()
+                    except Exception:
+                        # 回调异常不得导致信号线程终止，否则后续第二实例的唤醒全部失效
+                        logger.exception("on_signal callback raised")
             except pywintypes.error as e:
                 logger.debug("Pipe connection error: %s", e)
             finally:
