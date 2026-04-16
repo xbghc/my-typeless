@@ -1,10 +1,13 @@
-"""单实例机制 - Windows Named Mutex + TCP 回环信号"""
+"""单实例机制 - Windows Named Mutex + Named Pipe 信号"""
 
 import ctypes
 import logging
-import socket
 import threading
-from ctypes import wintypes
+
+import pywintypes
+import win32file
+import win32pipe
+import winerror
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +15,7 @@ _kernel32 = ctypes.windll.kernel32
 _ERROR_ALREADY_EXISTS = 183
 
 _MUTEX_NAME = "MyTypeless_SingleInstance"
-_SIGNAL_PORT = 47891
+_PIPE_NAME = r"\\.\pipe\MyTypeless_SingleInstance"
 
 
 class SingleInstance:
@@ -34,11 +37,10 @@ class SingleInstance:
 
 
 class SignalServer:
-    """TCP 回环服务器，监听来自第二实例的信号"""
+    """Named Pipe 服务器，监听来自第二实例的信号"""
 
     def __init__(self, on_signal: callable):
         self._on_signal = on_signal
-        self._server: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._running = False
 
@@ -49,46 +51,75 @@ class SignalServer:
         self._thread.start()
 
     def stop(self) -> None:
-        """停止信号服务器"""
+        """停止信号服务器
+
+        通过自连接 pipe 唤醒阻塞的 ConnectNamedPipe。
+        """
         self._running = False
-        if self._server:
-            try:
-                self._server.close()
-            except OSError:
-                pass
+        try:
+            handle = win32file.CreateFile(
+                _PIPE_NAME,
+                win32file.GENERIC_WRITE,
+                0,
+                None,
+                win32file.OPEN_EXISTING,
+                0,
+                None,
+            )
+            win32file.CloseHandle(handle)
+        except pywintypes.error:
+            # pipe 可能正处于两次创建之间，下次循环会检查 _running 并退出
+            pass
 
     def _serve(self) -> None:
-        self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            self._server.bind(("127.0.0.1", _SIGNAL_PORT))
-            self._server.listen(1)
-            self._server.settimeout(1.0)
-            while self._running:
+        while self._running:
+            try:
+                handle = win32pipe.CreateNamedPipe(
+                    _PIPE_NAME,
+                    win32pipe.PIPE_ACCESS_INBOUND,
+                    win32pipe.PIPE_TYPE_BYTE | win32pipe.PIPE_WAIT,
+                    1,  # 同一时刻只允许 1 个 pipe instance
+                    0, 0, 0, None,
+                )
+            except pywintypes.error as e:
+                logger.warning("CreateNamedPipe failed: %s", e)
+                return
+
+            try:
                 try:
-                    conn, _ = self._server.accept()
-                    conn.close()
+                    win32pipe.ConnectNamedPipe(handle, None)
+                except pywintypes.error as e:
+                    # ERROR_PIPE_CONNECTED: 客户端在 ConnectNamedPipe 调用前已连接，视为成功
+                    if e.winerror != winerror.ERROR_PIPE_CONNECTED:
+                        raise
+
+                if self._running:
                     self._on_signal()
-                except socket.timeout:
-                    continue
-                except OSError:
-                    break
-        except OSError as e:
-            logger.warning("Signal server bind failed: %s", e)
-        finally:
-            if self._server:
+            except pywintypes.error as e:
+                logger.debug("Pipe connection error: %s", e)
+            finally:
                 try:
-                    self._server.close()
-                except OSError:
+                    win32pipe.DisconnectNamedPipe(handle)
+                except pywintypes.error:
+                    pass
+                try:
+                    win32file.CloseHandle(handle)
+                except pywintypes.error:
                     pass
 
 
 def signal_existing_instance() -> None:
     """向已运行的实例发送信号（打开设置窗口）"""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(2.0)
-        s.connect(("127.0.0.1", _SIGNAL_PORT))
-        s.close()
-    except (ConnectionRefusedError, OSError):
+        handle = win32file.CreateFile(
+            _PIPE_NAME,
+            win32file.GENERIC_WRITE,
+            0,
+            None,
+            win32file.OPEN_EXISTING,
+            0,
+            None,
+        )
+        win32file.CloseHandle(handle)
+    except pywintypes.error:
         pass

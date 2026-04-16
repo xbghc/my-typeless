@@ -42,7 +42,7 @@ python scripts/build.py --version 1.0.0 --no-build
 - **API 线程**: STT + LLM 请求（每次录音会话临时创建）
 - **托盘线程**: pystray 系统托盘
 - **更新线程**: GitHub Releases 轮询（4小时间隔）
-- **信号线程**: TCP 回环服务器（端口 47891，用于单实例通信）
+- **信号线程**: Named Pipe 服务器（`\\.\pipe\MyTypeless_SingleInstance`，用于单实例通信）
 
 ### 核心模块关系
 
@@ -51,7 +51,7 @@ python scripts/build.py --version 1.0.0 --no-build
 - `hotkey.py` → 按键事件 → `worker.py` 开始/停止录音
 - `worker.py` 协调 `recorder.py` → `stt_client.py` → `llm_client.py` → `text_injector.py`
 - `worker.py` → 状态变化事件 → `tray.py` 更新图标（idle/recording/processing）
-- `single_instance.py` 通过 Win32 Named Mutex 确保单实例，第二次启动通过 TCP 通知第一个实例打开设置
+- `single_instance.py` 通过 Win32 Named Mutex 确保单实例，第二次启动通过 Named Pipe 通知第一个实例打开设置
 
 ### 设置界面
 
