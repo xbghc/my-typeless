@@ -17,6 +17,11 @@ VERSION_INFO_FILE = ROOT / "file_version_info.txt"
 RESOURCES_DIR = ROOT / "src" / "my_typeless" / "resources"
 
 
+def _normalize_version(version: str) -> str:
+    """去掉可能的 'v'/'V' 前缀，兼容 'v1.2.3' 与 '1.2.3' 两种写法"""
+    return version.lstrip("vV") if version else version
+
+
 def read_version() -> str:
     """从 version.py 读取当前版本号"""
     ns: dict = {}
@@ -26,6 +31,7 @@ def read_version() -> str:
 
 def write_version(version: str) -> None:
     """将版本号注入 version.py（由 CI 在发布构建时调用）"""
+    version = _normalize_version(version)
     VERSION_FILE.write_text(
         '"""Version module -- injected at build time by scripts/build.py."""\n\n'
         f'__version__ = "{version}"\n',
@@ -36,6 +42,7 @@ def write_version(version: str) -> None:
 
 def generate_version_info(version: str) -> None:
     """生成 Windows 版本信息文件"""
+    version = _normalize_version(version)
     base_version = re.split(r"[-+]", version, maxsplit=1)[0]
     parts = [int(x) for x in base_version.split(".")]
     while len(parts) < 4:
