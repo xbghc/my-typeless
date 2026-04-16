@@ -59,7 +59,6 @@ a = Analysis(
         "numpy",
         "pandas",
         "scipy",
-        "PIL",
         "pytest",
     ],
     noarchive=False,
