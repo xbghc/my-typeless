@@ -128,7 +128,7 @@ class MyTypelessApp:
             return 0
 
         # 创建隐藏的设置窗口（pywebview 需要主线程）
-        self._window = webview.create_window(
+        window = webview.create_window(
             "My Typeless",
             url=str(_WEB_DIR / "index.html"),
             js_api=self._api,
@@ -137,8 +137,10 @@ class MyTypelessApp:
             resizable=False,
             hidden=True,
         )
-        self._api.set_window(self._window)
-        self._window.events.closing += self._on_window_closing
+        assert window is not None, "webview.create_window 返回空"
+        self._window = window
+        self._api.set_window(window)
+        window.events.closing += self._on_window_closing
 
         def _start_services():
             """webview 就绪后启动后台服务"""
