@@ -8,13 +8,15 @@ import webview
 
 from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
-from my_typeless.worker import Worker
+from my_typeless.single_instance import (
+    SignalServer,
+    SingleInstance,
+    signal_existing_instance,
+)
 from my_typeless.tray import TrayManager
 from my_typeless.updater import UpdateChecker, apply_update
 from my_typeless.webview_api import SettingsAPI
-from my_typeless.single_instance import (
-    SingleInstance, SignalServer, signal_existing_instance,
-)
+from my_typeless.worker import Worker
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +153,7 @@ class MyTypelessApp:
 
 def main():
     from my_typeless.config import CONFIG_DIR
+
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.DEBUG,

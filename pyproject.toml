@@ -21,6 +21,8 @@ my-typeless = "my_typeless.main:main"
 dev = [
     "pyinstaller>=6.0",
     "resvg_py>=0.3",
+    "ruff>=0.6",
+    "pyright>=1.1.380",
 ]
 
 [build-system]
@@ -33,3 +35,23 @@ packages = ["src/my_typeless"]
 [tool.hatch.version]
 path = "src/my_typeless/version.py"
 pattern = '__version__ = "(?P<version>[^"]+)"'
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src"]
+extend-exclude = ["build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",   # 行长由 formatter 处理
+    "SIM105", # try/except/pass 可读性优于 contextlib.suppress，不强制
+]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+reportMissingImports = "warning"  # 规避 keyboard/pyaudio 在 ubuntu runner 上缺 stub
+reportMissingTypeStubs = "none"

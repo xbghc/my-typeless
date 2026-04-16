@@ -2,8 +2,9 @@
 
 import ctypes
 import threading
+
 import pystray
-from pystray import MenuItem, Menu
+from pystray import Menu, MenuItem
 
 from my_typeless.icons import load_tray_icon
 from my_typeless.version import __version__ as APP_VERSION
@@ -82,6 +83,7 @@ class TrayManager:
 
     def _show_about(self) -> None:
         """显示关于信息（Win32 MessageBox，独立线程避免阻塞托盘消息泵）"""
+
         def _show():
             text = (
                 f"My Typeless v{APP_VERSION}\n\n"
@@ -91,6 +93,10 @@ class TrayManager:
             MB_OK = 0x00000000
             MB_ICONINFORMATION = 0x00000040
             ctypes.windll.user32.MessageBoxW(
-                None, text, "About My Typeless", MB_OK | MB_ICONINFORMATION,
+                None,
+                text,
+                "About My Typeless",
+                MB_OK | MB_ICONINFORMATION,
             )
+
         threading.Thread(target=_show, daemon=True).start()

@@ -1,7 +1,8 @@
 """轻量级线程安全事件发射器 - 替代 Qt 信号/槽"""
 
 import threading
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
 
 
 class EventEmitter:
@@ -27,9 +28,7 @@ class EventEmitter:
         """取消事件监听器"""
         with self._lock:
             if event in self._listeners:
-                self._listeners[event] = [
-                    cb for cb in self._listeners[event] if cb is not callback
-                ]
+                self._listeners[event] = [cb for cb in self._listeners[event] if cb is not callback]
 
     def emit(self, event: str, *args: Any, **kwargs: Any) -> None:
         """触发事件，同步调用所有已注册的回调"""

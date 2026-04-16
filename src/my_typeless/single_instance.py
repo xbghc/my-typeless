@@ -79,7 +79,10 @@ class SignalServer:
                     win32pipe.PIPE_ACCESS_INBOUND,
                     win32pipe.PIPE_TYPE_BYTE | win32pipe.PIPE_WAIT,
                     1,  # 同一时刻只允许 1 个 pipe instance
-                    0, 0, 0, None,
+                    0,
+                    0,
+                    0,
+                    None,
                 )
             except pywintypes.error as e:
                 logger.warning("CreateNamedPipe failed: %s", e)

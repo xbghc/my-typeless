@@ -1,7 +1,9 @@
 """语音转文字客户端 - 使用 OpenAI 兼容 API (Whisper)"""
 
 import io
+
 from openai import OpenAI
+
 from my_typeless.config import STTConfig
 
 
@@ -11,8 +13,8 @@ class STTClient:
     def __init__(self, config: STTConfig):
         self._config = config
         self._client = OpenAI(
-            base_url=config.active_provider.base_url if config.active_provider else '',
-            api_key=config.active_provider.api_key if config.active_provider else '',
+            base_url=config.active_provider.base_url if config.active_provider else "",
+            api_key=config.active_provider.api_key if config.active_provider else "",
         )
 
     def transcribe(self, audio_data: bytes, prompt: str = "") -> str:

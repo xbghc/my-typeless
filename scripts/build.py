@@ -100,7 +100,10 @@ def generate_ico() -> None:
         if ico_path.exists():
             print("[build] resvg_py/Pillow not installed, using existing ICO file")
             return
-        print("[build] ERROR: resvg_py/Pillow required for ICO generation but not installed", file=sys.stderr)
+        print(
+            "[build] ERROR: resvg_py/Pillow required for ICO generation but not installed",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     sizes = [16, 24, 32, 48, 64, 128, 256]
@@ -149,7 +152,9 @@ def generate_tray_pngs() -> None:
 def run_pyinstaller() -> None:
     """执行 PyInstaller 构建"""
     cmd = [
-        sys.executable, "-m", "PyInstaller",
+        sys.executable,
+        "-m",
+        "PyInstaller",
         str(SPEC_FILE),
         "--clean",
         "--noconfirm",
@@ -166,7 +171,8 @@ def run_pyinstaller() -> None:
 def main():
     parser = argparse.ArgumentParser(description="Build My Typeless executable")
     parser.add_argument(
-        "--version", "-v",
+        "--version",
+        "-v",
         help="Set version before building (e.g. 1.2.0)",
     )
     parser.add_argument(
@@ -178,7 +184,7 @@ def main():
 
     if args.version:
         write_version(args.version)
-    
+
     version = read_version()
     print(f"[build] Building version {version}")
 

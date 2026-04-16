@@ -1,7 +1,8 @@
 """LLM 文本精修客户端 - 支持 OpenAI 兼容 API 和 Anthropic API"""
 
-from openai import OpenAI
 from anthropic import Anthropic
+from openai import OpenAI
+
 from my_typeless.config import LLMConfig
 
 
@@ -10,12 +11,14 @@ class LLMClient:
 
     def __init__(self, config: LLMConfig):
         self._config = config
-        self._provider_type = config.active_provider.provider_type if config.active_provider else 'openai'
+        self._provider_type = (
+            config.active_provider.provider_type if config.active_provider else "openai"
+        )
 
-        base_url = config.active_provider.base_url if config.active_provider else ''
-        api_key = config.active_provider.api_key if config.active_provider else ''
+        base_url = config.active_provider.base_url if config.active_provider else ""
+        api_key = config.active_provider.api_key if config.active_provider else ""
 
-        if self._provider_type == 'anthropic':
+        if self._provider_type == "anthropic":
             self._client = Anthropic(api_key=api_key, base_url=base_url if base_url else None)
         else:
             self._client = OpenAI(base_url=base_url, api_key=api_key)
@@ -44,7 +47,7 @@ class LLMClient:
         else:
             user_message = raw_text
 
-        if self._provider_type == 'anthropic':
+        if self._provider_type == "anthropic":
             response = self._client.messages.create(
                 model=self._config.active_model,
                 system=prompt,
