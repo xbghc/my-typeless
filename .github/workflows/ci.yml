@@ -75,7 +75,9 @@ jobs:
           pip install .
 
       - name: Inject CI version
-        run: python scripts/build.py --version 0.0.0.ci --no-build
+        # 注意：scripts/build.py 的 generate_version_info 会把版本号拆成
+        # 4 段整数写进 Windows 版本资源，因此这里必须用纯数字版本。
+        run: python scripts/build.py --version 0.0.0 --no-build
 
       - name: Build with PyInstaller
         run: pyinstaller my_typeless.spec --clean --noconfirm
