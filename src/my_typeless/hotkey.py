@@ -29,28 +29,30 @@ _VK_TO_NAME = {
 # C 类型定义（64 位兼容）
 LRESULT = ctypes.c_ssize_t
 ULONG_PTR = ctypes.c_size_t
-LowLevelKeyboardProc = ctypes.CFUNCTYPE(
-    LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
-)
+LowLevelKeyboardProc = ctypes.CFUNCTYPE(LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
 
 # 设置 Win32 API 类型
 _user32 = ctypes.windll.user32
 _kernel32 = ctypes.windll.kernel32
 
-_user32.CallNextHookEx.argtypes = [
-    wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
-]
+_user32.CallNextHookEx.argtypes = [wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
 _user32.CallNextHookEx.restype = LRESULT
 _user32.SetWindowsHookExW.restype = wintypes.HHOOK
 _user32.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
 
 _user32.GetMessageW.argtypes = [
-    ctypes.POINTER(wintypes.MSG), wintypes.HWND, ctypes.c_uint, ctypes.c_uint
+    ctypes.POINTER(wintypes.MSG),
+    wintypes.HWND,
+    ctypes.c_uint,
+    ctypes.c_uint,
 ]
 _user32.GetMessageW.restype = wintypes.BOOL
 
 _user32.PostThreadMessageW.argtypes = [
-    wintypes.DWORD, ctypes.c_uint, wintypes.WPARAM, wintypes.LPARAM
+    wintypes.DWORD,
+    ctypes.c_uint,
+    wintypes.WPARAM,
+    wintypes.LPARAM,
 ]
 _user32.PostThreadMessageW.restype = wintypes.BOOL
 

@@ -6,7 +6,6 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +13,7 @@ HISTORY_DIR = Path.home() / ".my-typeless"
 HISTORY_DB = HISTORY_DIR / "history.db"
 _LEGACY_FILE = HISTORY_DIR / "history.json"
 
-_conn: Optional[sqlite3.Connection] = None
+_conn: sqlite3.Connection | None = None
 
 
 @dataclass
@@ -22,20 +21,20 @@ class HistoryEntry:
     timestamp: str
     raw_input: str
     refined_output: str
-    key_press_at: Optional[str] = field(default=None)
-    key_release_at: Optional[str] = field(default=None)
-    stt_done_at: Optional[str] = field(default=None)
-    llm_done_at: Optional[str] = field(default=None)
+    key_press_at: str | None = field(default=None)
+    key_release_at: str | None = field(default=None)
+    stt_done_at: str | None = field(default=None)
+    llm_done_at: str | None = field(default=None)
 
     @staticmethod
     def now(
         raw_input: str,
         refined_output: str,
         *,
-        key_press_at: Optional[str] = None,
-        key_release_at: Optional[str] = None,
-        stt_done_at: Optional[str] = None,
-        llm_done_at: Optional[str] = None,
+        key_press_at: str | None = None,
+        key_release_at: str | None = None,
+        stt_done_at: str | None = None,
+        llm_done_at: str | None = None,
     ) -> "HistoryEntry":
         return HistoryEntry(
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -108,14 +107,15 @@ def add_history(
     raw_input: str,
     refined_output: str,
     *,
-    key_press_at: Optional[str] = None,
-    key_release_at: Optional[str] = None,
-    stt_done_at: Optional[str] = None,
-    llm_done_at: Optional[str] = None,
+    key_press_at: str | None = None,
+    key_release_at: str | None = None,
+    stt_done_at: str | None = None,
+    llm_done_at: str | None = None,
 ) -> None:
     """新增一条历史记录"""
     entry = HistoryEntry.now(
-        raw_input, refined_output,
+        raw_input,
+        refined_output,
         key_press_at=key_press_at,
         key_release_at=key_release_at,
         stt_done_at=stt_done_at,
@@ -124,7 +124,15 @@ def add_history(
     conn = _get_conn()
     conn.execute(
         "INSERT INTO history (timestamp, raw_input, refined_output, key_press_at, key_release_at, stt_done_at, llm_done_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (entry.timestamp, entry.raw_input, entry.refined_output, entry.key_press_at, entry.key_release_at, entry.stt_done_at, entry.llm_done_at),
+        (
+            entry.timestamp,
+            entry.raw_input,
+            entry.refined_output,
+            entry.key_press_at,
+            entry.key_release_at,
+            entry.stt_done_at,
+            entry.llm_done_at,
+        ),
     )
     conn.commit()
 

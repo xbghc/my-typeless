@@ -1,7 +1,8 @@
 """LLM 文本精修客户端 - 支持 OpenAI 兼容 API 和 Anthropic API"""
 
-from openai import OpenAI
 from anthropic import Anthropic
+from openai import OpenAI
+
 from my_typeless.config import LLMConfig
 
 
@@ -10,12 +11,14 @@ class LLMClient:
 
     def __init__(self, config: LLMConfig):
         self._config = config
-        self._provider_type = config.active_provider.provider_type if config.active_provider else 'openai'
+        self._provider_type = (
+            config.active_provider.provider_type if config.active_provider else "openai"
+        )
 
-        base_url = config.active_provider.base_url if config.active_provider else ''
-        api_key = config.active_provider.api_key if config.active_provider else ''
+        base_url = config.active_provider.base_url if config.active_provider else ""
+        api_key = config.active_provider.api_key if config.active_provider else ""
 
-        if self._provider_type == 'anthropic':
+        if self._provider_type == "anthropic":
             self._client = Anthropic(api_key=api_key, base_url=base_url if base_url else None)
         else:
             self._client = OpenAI(base_url=base_url, api_key=api_key)
@@ -44,7 +47,8 @@ class LLMClient:
         else:
             user_message = raw_text
 
-        if self._provider_type == 'anthropic':
+        if self._provider_type == "anthropic":
+            assert isinstance(self._client, Anthropic)
             response = self._client.messages.create(
                 model=self._config.active_model,
                 system=prompt,
@@ -53,8 +57,12 @@ class LLMClient:
                 ],
                 max_tokens=4096,
             )
-            return response.content[0].text or raw_text
+            # messages.create 对纯文本对话始终返回 TextBlock 开头；
+            # 其余 block 类型（tool use 等）此处不启用
+            first = response.content[0]
+            return getattr(first, "text", None) or raw_text
         else:
+            assert isinstance(self._client, OpenAI)
             response = self._client.chat.completions.create(
                 model=self._config.active_model,
                 messages=[

@@ -1,6 +1,7 @@
 """图标与资源加载工具 - 使用 Pillow"""
 
 from pathlib import Path
+
 from PIL import Image
 
 RESOURCES_DIR = Path(__file__).parent / "resources"

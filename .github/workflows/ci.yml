@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "installer.iss"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: ruff format --check
+        run: ruff format --check .
+
+  typecheck:
+    name: Typecheck (pyright)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install project + pyright
+        # 在 Windows runner 上 pip install . 可以完整安装所有运行时依赖
+        # （pywin32、pyaudio、keyboard 等），pyright 能拿到全部类型 stub。
+        run: |
+          pip install --upgrade pip
+          pip install .
+          pip install pyright
+
+      - name: pyright
+        run: pyright
+
+  build-smoke:
+    name: Build smoke test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller resvg_py
+          pip install .
+
+      - name: Inject CI version
+        # 注意：scripts/build.py 的 generate_version_info 会把版本号拆成
+        # 4 段整数写进 Windows 版本资源，因此这里必须用纯数字版本。
+        run: python scripts/build.py --version 0.0.0 --no-build
+
+      - name: Build with PyInstaller
+        run: pyinstaller my_typeless.spec --clean --noconfirm
+
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          $exe = "dist/MyTypeless.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "Build failed: $exe not found"
+            exit 1
+          }
+          $sizeMB = (Get-Item $exe).Length / 1MB
+          Write-Host "Build successful. Size: $([math]::Round($sizeMB, 2)) MB"
+          if ($sizeMB -lt 10) {
+            Write-Error "Executable suspiciously small ($sizeMB MB); likely broken bundle."
+            exit 1
+          }

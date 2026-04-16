@@ -1,6 +1,7 @@
 """文本注入模块 - 通过剪贴板粘贴方式注入文本"""
 
 import time
+
 import keyboard
 import win32clipboard
 import win32con
@@ -34,7 +35,7 @@ def _set_clipboard_text(text: str) -> None:
 def inject_text(text: str) -> None:
     """
     通过剪贴板粘贴方式注入文本到当前光标位置
-    
+
     流程：备份剪贴板 → 写入文本 → 模拟 Ctrl+V → 还原剪贴板
     """
     # 1. 备份当前剪贴板

@@ -1,14 +1,14 @@
 """pywebview API 桥接 - 将 Python 后端暴露给前端 JS"""
 
 import logging
+from collections.abc import Callable
 from dataclasses import asdict
 
 import keyboard
-
 from openai import OpenAI
 
 from my_typeless.config import AppConfig
-from my_typeless.history import get_history_page, clear_history, add_history
+from my_typeless.history import add_history, clear_history, get_history_page
 from my_typeless.llm_client import LLMClient
 from my_typeless.version import __version__
 
@@ -16,20 +16,39 @@ logger = logging.getLogger(__name__)
 
 # 允许的热键列表
 ALLOWED_HOTKEYS = [
-    "left alt", "right alt", "alt",
-    "left ctrl", "right ctrl", "ctrl",
-    "left shift", "right shift", "shift",
-    "left windows", "right windows",
-    "caps lock", "tab", "space",
-    "f1", "f2", "f3", "f4", "f5", "f6",
-    "f7", "f8", "f9", "f10", "f11", "f12",
+    "left alt",
+    "right alt",
+    "alt",
+    "left ctrl",
+    "right ctrl",
+    "ctrl",
+    "left shift",
+    "right shift",
+    "shift",
+    "left windows",
+    "right windows",
+    "caps lock",
+    "tab",
+    "space",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
 ]
 
 
 class SettingsAPI:
     """暴露给 pywebview 前端的 API（通过 window.pywebview.api 调用）"""
 
-    def __init__(self, config: AppConfig, on_save: callable = None):
+    def __init__(self, config: AppConfig, on_save: Callable[[AppConfig], None] | None = None):
         self._config = config
         self._on_save = on_save
         self._window = None
@@ -49,21 +68,27 @@ class SettingsAPI:
             self._config.start_with_windows = data.get("start_with_windows", False)
 
             stt = data.get("stt", {})
-            self._config.stt.active_provider_id = stt.get("active_provider_id", self._config.stt.active_provider_id)
+            self._config.stt.active_provider_id = stt.get(
+                "active_provider_id", self._config.stt.active_provider_id
+            )
             self._config.stt.active_model = stt.get("active_model", self._config.stt.active_model)
             self._config.stt.language = stt.get("language", self._config.stt.language)
 
             if "providers" in stt:
                 from my_typeless.config import ProviderConfig
+
                 self._config.stt.providers = [ProviderConfig(**p) for p in stt["providers"]]
 
             llm = data.get("llm", {})
-            self._config.llm.active_provider_id = llm.get("active_provider_id", self._config.llm.active_provider_id)
+            self._config.llm.active_provider_id = llm.get(
+                "active_provider_id", self._config.llm.active_provider_id
+            )
             self._config.llm.active_model = llm.get("active_model", self._config.llm.active_model)
             self._config.llm.prompt = llm.get("prompt", self._config.llm.prompt)
 
             if "providers" in llm:
                 from my_typeless.config import ProviderConfig
+
                 self._config.llm.providers = [ProviderConfig(**p) for p in llm["providers"]]
 
             self._config.glossary = data.get("glossary", [])
@@ -85,7 +110,7 @@ class SettingsAPI:
         clear_history()
         return {"success": True}
 
-    def run_test(self, raw_text: str, llm_override: dict = None) -> dict:
+    def run_test(self, raw_text: str, llm_override: dict | None = None) -> dict:
         """测试 LLM 精修"""
         try:
             llm_config = self._config.llm
@@ -111,10 +136,18 @@ class SettingsAPI:
 
             # We need to temporarily modify the active provider details for LLMClient
             # Since LLMClient just expects an LLMConfig, we can build a temp one.
-            from my_typeless.config import LLMConfig as ConfigLLMConfig, ProviderConfig
+            from my_typeless.config import LLMConfig as ConfigLLMConfig
+            from my_typeless.config import ProviderConfig
 
-            temp_provider = ProviderConfig(id="temp", name="temp", base_url=base_url, api_key=api_key, models=[model])
-            temp_llm_config = ConfigLLMConfig(providers=[temp_provider], active_provider_id="temp", active_model=model, prompt=prompt)
+            temp_provider = ProviderConfig(
+                id="temp", name="temp", base_url=base_url, api_key=api_key, models=[model]
+            )
+            temp_llm_config = ConfigLLMConfig(
+                providers=[temp_provider],
+                active_provider_id="temp",
+                active_model=model,
+                prompt=prompt,
+            )
 
             client = LLMClient(temp_llm_config)
             result = client.refine(raw_text, system_prompt=system_prompt)
@@ -137,6 +170,7 @@ class SettingsAPI:
 
     def start_hotkey_capture(self) -> None:
         """开始捕获热键按键，结果通过 evaluate_js 回调"""
+
         def on_key(event):
             if event.event_type != keyboard.KEY_DOWN:
                 return
@@ -169,18 +203,20 @@ class SettingsAPI:
             if not api_key or not model:
                 return {"success": False, "error": "API Key and Model are required for testing"}
 
-            if provider_type == 'anthropic':
+            if provider_type == "anthropic":
                 from anthropic import Anthropic
+
                 client = Anthropic(api_key=api_key, base_url=base_url if base_url else None)
                 # Anthropic doesn't have a simple models.retrieve endpoint, test by making a minimal call
                 client.messages.create(
-                    model=model,
-                    max_tokens=1,
-                    messages=[{"role": "user", "content": "test"}]
+                    model=model, max_tokens=1, messages=[{"role": "user", "content": "test"}]
                 )
             else:
                 if not base_url:
-                     return {"success": False, "error": "Base URL is required for OpenAI compatible providers"}
+                    return {
+                        "success": False,
+                        "error": "Base URL is required for OpenAI compatible providers",
+                    }
                 client = OpenAI(base_url=base_url, api_key=api_key)
                 client.models.retrieve(model)
 
@@ -196,7 +232,6 @@ class SettingsAPI:
     def test_llm_connection(self, provider_config: dict | None = None) -> dict:
         """测试 LLM API 连接"""
         return self._test_client_connection(provider_config, "LLM")
-
 
     def close_window(self) -> None:
         """隐藏设置窗口（窗口保持存活供下次打开）"""

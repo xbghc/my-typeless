@@ -8,13 +8,15 @@ import webview
 
 from my_typeless.config import AppConfig
 from my_typeless.hotkey import HotkeyListener
-from my_typeless.worker import Worker
+from my_typeless.single_instance import (
+    SignalServer,
+    SingleInstance,
+    signal_existing_instance,
+)
 from my_typeless.tray import TrayManager
 from my_typeless.updater import UpdateChecker, apply_update
 from my_typeless.webview_api import SettingsAPI
-from my_typeless.single_instance import (
-    SingleInstance, SignalServer, signal_existing_instance,
-)
+from my_typeless.worker import Worker
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +75,8 @@ class MyTypelessApp:
     def _on_window_closing(self):
         """拦截窗口关闭，改为隐藏"""
         if not self._allow_close:
-            self._window.hide()
+            if self._window:
+                self._window.hide()
             return False
 
     def _on_config_saved(self, config: AppConfig) -> None:
@@ -125,7 +128,7 @@ class MyTypelessApp:
             return 0
 
         # 创建隐藏的设置窗口（pywebview 需要主线程）
-        self._window = webview.create_window(
+        window = webview.create_window(
             "My Typeless",
             url=str(_WEB_DIR / "index.html"),
             js_api=self._api,
@@ -134,8 +137,10 @@ class MyTypelessApp:
             resizable=False,
             hidden=True,
         )
-        self._api.set_window(self._window)
-        self._window.events.closing += self._on_window_closing
+        assert window is not None, "webview.create_window 返回空"
+        self._window = window
+        self._api.set_window(window)
+        window.events.closing += self._on_window_closing
 
         def _start_services():
             """webview 就绪后启动后台服务"""
@@ -151,6 +156,7 @@ class MyTypelessApp:
 
 def main():
     from my_typeless.config import CONFIG_DIR
+
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.DEBUG,

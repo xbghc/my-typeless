@@ -16,7 +16,6 @@ import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -38,13 +37,14 @@ ASSET_PREFIX = "MyTypeless-Setup"
 @dataclass
 class ReleaseInfo:
     """GitHub Release 信息"""
-    tag: str          # e.g. "v1.2.0"
-    version: str      # e.g. "1.2.0"
-    name: str         # Release 标题
-    body: str         # Release 描述 (Markdown)
-    download_url: str # 可执行文件下载地址
-    asset_name: str   # 资产文件名（如 MyTypeless-Setup-v1.2.0.exe）
-    size: int         # 文件大小 (bytes)
+
+    tag: str  # e.g. "v1.2.0"
+    version: str  # e.g. "1.2.0"
+    name: str  # Release 标题
+    body: str  # Release 描述 (Markdown)
+    download_url: str  # 可执行文件下载地址
+    asset_name: str  # 资产文件名（如 MyTypeless-Setup-v1.2.0.exe）
+    size: int  # 文件大小 (bytes)
     published_at: str
 
 
@@ -67,16 +67,19 @@ def is_newer(remote: str, local: str = __version__) -> bool:
 
 
 # ── GitHub API ────────────────────────────────────────────────────────────
-def fetch_latest_release() -> Optional[ReleaseInfo]:
+def fetch_latest_release() -> ReleaseInfo | None:
     """
     从 GitHub API 获取最新 Release 信息。
     返回 None 表示无可用更新或请求失败。
     """
     url = f"{GITHUB_API}/releases/latest"
-    req = Request(url, headers={
-        "Accept": "application/vnd.github+json",
-        "User-Agent": f"MyTypeless/{__version__}",
-    })
+    req = Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"MyTypeless/{__version__}",
+        },
+    )
     try:
         with urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
@@ -118,15 +121,17 @@ def fetch_latest_release() -> Optional[ReleaseInfo]:
     )
 
 
-def download_release(release: ReleaseInfo, dest: Path,
-                     progress_cb=None) -> bool:
+def download_release(release: ReleaseInfo, dest: Path, progress_cb=None) -> bool:
     """
     下载 Release 资产到 dest 路径。
     progress_cb(downloaded_bytes, total_bytes) 可选进度回调。
     """
-    req = Request(release.download_url, headers={
-        "User-Agent": f"MyTypeless/{__version__}",
-    })
+    req = Request(
+        release.download_url,
+        headers={
+            "User-Agent": f"MyTypeless/{__version__}",
+        },
+    )
     try:
         with urlopen(req, timeout=120) as resp:
             total = release.size or int(resp.headers.get("Content-Length", 0))
@@ -218,9 +223,7 @@ class UpdateChecker:
 
     def download(self, release: ReleaseInfo):
         """在后台线程开始下载新版本"""
-        threading.Thread(
-            target=self._do_download, args=(release,), daemon=True
-        ).start()
+        threading.Thread(target=self._do_download, args=(release,), daemon=True).start()
 
     def _do_check(self):
         if ".dev" in __version__:

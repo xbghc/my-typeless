@@ -3,12 +3,11 @@
 import io
 import math
 import struct
-import wave
 import threading
-from typing import Callable
+import wave
+from collections.abc import Callable
 
 import pyaudio
-
 
 # Whisper 推荐参数
 SAMPLE_RATE = 16000
@@ -18,8 +17,8 @@ CHUNK_SIZE = 1024
 FORMAT = pyaudio.paInt16
 
 # 停顿检测参数
-SILENCE_THRESHOLD = 500   # RMS 阈值，低于此值视为静音
-SILENCE_DURATION = 0.6    # 静音持续秒数，超过则认为是停顿
+SILENCE_THRESHOLD = 500  # RMS 阈值，低于此值视为静音
+SILENCE_DURATION = 0.6  # 静音持续秒数，超过则认为是停顿
 MIN_SPEECH_DURATION = 0.5  # 最短语音片段时长（秒），过短的片段不发送
 
 
@@ -113,21 +112,14 @@ class Recorder:
                     # 静音
                     self._silence_chunks += 1
 
-                    if (
-                        self._in_speech
-                        and self._silence_chunks >= silence_chunks_needed
-                    ):
+                    if self._in_speech and self._silence_chunks >= silence_chunks_needed:
                         # 检测到停顿，发送语音片段
                         speech_end = len(self._segment_frames) - self._silence_chunks
                         if speech_end >= min_speech_chunks:
-                            segment_wav = self._build_wav(
-                                self._segment_frames[:speech_end]
-                            )
+                            segment_wav = self._build_wav(self._segment_frames[:speech_end])
                             self._on_segment(segment_wav)
                         # 保留尾部静音帧作为下一段的起始缓冲
-                        self._segment_frames = list(
-                            self._segment_frames[-self._silence_chunks :]
-                        )
+                        self._segment_frames = list(self._segment_frames[-self._silence_chunks :])
                         self._in_speech = False
                         self._silence_chunks = 0
         except Exception:

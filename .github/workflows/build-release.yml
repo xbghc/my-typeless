@@ -80,6 +80,18 @@ jobs:
             exit 1
           }
 
+      - name: Generate SHA256 checksums
+        shell: pwsh
+        run: |
+          cd dist
+          $exe = "MyTypeless.exe"
+          $setup = "MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe"
+          Get-FileHash $exe, $setup -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } |
+            Out-File -Encoding ascii SHA256SUMS.txt
+          Write-Host "Checksums:"
+          Get-Content SHA256SUMS.txt
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
         with:
@@ -87,6 +99,7 @@ jobs:
           path: |
             dist/MyTypeless.exe
             dist/MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe
+            dist/SHA256SUMS.txt
           retention-days: 30
 
   release:
@@ -129,5 +142,6 @@ jobs:
           files: |
             artifacts/MyTypeless.exe
             artifacts/MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe
+            artifacts/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
