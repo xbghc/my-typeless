@@ -107,7 +107,8 @@ class Worker:
                 except queue.Empty:
                     continue
 
-                if isinstance(item, tuple) and item[0] is _SENTINEL:
+                if isinstance(item, tuple):
+                    # 队列中元组只会是 (_SENTINEL, key_release_at) 哨兵值
                     key_release_at = item[1]
                     break
 

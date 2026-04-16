@@ -48,6 +48,7 @@ class LLMClient:
             user_message = raw_text
 
         if self._provider_type == "anthropic":
+            assert isinstance(self._client, Anthropic)
             response = self._client.messages.create(
                 model=self._config.active_model,
                 system=prompt,
@@ -56,8 +57,12 @@ class LLMClient:
                 ],
                 max_tokens=4096,
             )
-            return response.content[0].text or raw_text
+            # messages.create 对纯文本对话始终返回 TextBlock 开头；
+            # 其余 block 类型（tool use 等）此处不启用
+            first = response.content[0]
+            return getattr(first, "text", None) or raw_text
         else:
+            assert isinstance(self._client, OpenAI)
             response = self._client.chat.completions.create(
                 model=self._config.active_model,
                 messages=[

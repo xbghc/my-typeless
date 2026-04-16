@@ -2,6 +2,7 @@
 
 import ctypes
 import threading
+from collections.abc import Callable
 
 import pystray
 from pystray import Menu, MenuItem
@@ -22,8 +23,8 @@ class TrayManager:
         self._state = "idle"
 
         # 回调（由 main.py 设置）
-        self.on_show_window: callable = lambda: None
-        self.on_quit: callable = lambda: None
+        self.on_show_window: Callable[[], None] = lambda: None
+        self.on_quit: Callable[[], None] = lambda: None
 
         self._icon = pystray.Icon(
             name="my-typeless",
@@ -92,7 +93,7 @@ class TrayManager:
             )
             MB_OK = 0x00000000
             MB_ICONINFORMATION = 0x00000040
-            ctypes.windll.user32.MessageBoxW(
+            ctypes.windll.user32.MessageBoxW(  # type: ignore[attr-defined]
                 None,
                 text,
                 "About My Typeless",

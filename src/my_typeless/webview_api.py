@@ -1,6 +1,7 @@
 """pywebview API 桥接 - 将 Python 后端暴露给前端 JS"""
 
 import logging
+from collections.abc import Callable
 from dataclasses import asdict
 
 import keyboard
@@ -47,7 +48,7 @@ ALLOWED_HOTKEYS = [
 class SettingsAPI:
     """暴露给 pywebview 前端的 API（通过 window.pywebview.api 调用）"""
 
-    def __init__(self, config: AppConfig, on_save: callable = None):
+    def __init__(self, config: AppConfig, on_save: Callable[[AppConfig], None] | None = None):
         self._config = config
         self._on_save = on_save
         self._window = None
@@ -109,7 +110,7 @@ class SettingsAPI:
         clear_history()
         return {"success": True}
 
-    def run_test(self, raw_text: str, llm_override: dict = None) -> dict:
+    def run_test(self, raw_text: str, llm_override: dict | None = None) -> dict:
         """测试 LLM 精修"""
         try:
             llm_config = self._config.llm

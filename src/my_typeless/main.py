@@ -75,7 +75,8 @@ class MyTypelessApp:
     def _on_window_closing(self):
         """拦截窗口关闭，改为隐藏"""
         if not self._allow_close:
-            self._window.hide()
+            if self._window:
+                self._window.hide()
             return False
 
     def _on_config_saved(self, config: AppConfig) -> None:

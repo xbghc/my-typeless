@@ -3,6 +3,7 @@
 import ctypes
 import logging
 import threading
+from collections.abc import Callable
 
 import pywintypes
 import win32file
@@ -11,7 +12,7 @@ import winerror
 
 logger = logging.getLogger(__name__)
 
-_kernel32 = ctypes.windll.kernel32
+_kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
 _ERROR_ALREADY_EXISTS = 183
 
 _MUTEX_NAME = "MyTypeless_SingleInstance"
@@ -39,7 +40,7 @@ class SingleInstance:
 class SignalServer:
     """Named Pipe 服务器，监听来自第二实例的信号"""
 
-    def __init__(self, on_signal: callable):
+    def __init__(self, on_signal: Callable[[], None]):
         self._on_signal = on_signal
         self._thread: threading.Thread | None = None
         self._running = False
@@ -66,7 +67,7 @@ class SignalServer:
                 0,
                 None,
             )
-            win32file.CloseHandle(handle)
+            win32file.CloseHandle(handle)  # type: ignore[arg-type]
         except pywintypes.error:
             # pipe 可能正处于两次创建之间，下次循环会检查 _running 并退出
             pass
@@ -82,7 +83,7 @@ class SignalServer:
                     0,
                     0,
                     0,
-                    None,
+                    None,  # type: ignore[arg-type]
                 )
             except pywintypes.error as e:
                 logger.warning("CreateNamedPipe failed: %s", e)
@@ -123,6 +124,6 @@ def signal_existing_instance() -> None:
             0,
             None,
         )
-        win32file.CloseHandle(handle)
+        win32file.CloseHandle(handle)  # type: ignore[arg-type]
     except pywintypes.error:
         pass

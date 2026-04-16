@@ -37,9 +37,6 @@ jobs:
   typecheck:
     name: Typecheck (pyright)
     runs-on: ubuntu-latest
-    # 当前代码库首次引入类型检查，存在历史遗留错误；
-    # 先以 informational 方式运行，后续清理干净后再改为 blocking。
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
 
@@ -48,11 +45,15 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install project + pyright
+      - name: Install pyright + narrowing deps
+        # 只装 pyright 做类型检查所需的包：
+        #   - openai / anthropic：isinstance(..., openai.AuthenticationError) 等需要真实类型
+        # 不装 pywin32（无 Linux 发行版）、pyaudio（需 portaudio 系统依赖）、
+        # keyboard、pystray、pywebview；它们在 pyproject.toml [tool.pyright] 里
+        # 被 reportMissingImports = "warning" 归为非致命警告。
         run: |
           pip install --upgrade pip
-          pip install .
-          pip install pyright
+          pip install pyright openai anthropic
 
       - name: pyright
         run: pyright
