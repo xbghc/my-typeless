@@ -94,19 +94,19 @@ def generate_ico() -> None:
         return
 
     try:
-        import cairosvg
+        import resvg_py
         from PIL import Image
     except ImportError:
         if ico_path.exists():
-            print("[build] cairosvg/Pillow not installed, using existing ICO file")
+            print("[build] resvg_py/Pillow not installed, using existing ICO file")
             return
-        print("[build] ERROR: cairosvg/Pillow required for ICO generation but not installed", file=sys.stderr)
+        print("[build] ERROR: resvg_py/Pillow required for ICO generation but not installed", file=sys.stderr)
         sys.exit(1)
 
     sizes = [16, 24, 32, 48, 64, 128, 256]
     images = []
     for size in sizes:
-        png_data = cairosvg.svg2png(url=str(svg_path), output_width=size, output_height=size)
+        png_data = bytes(resvg_py.svg_to_bytes(svg_path=str(svg_path), width=size, height=size))
         images.append(Image.open(io.BytesIO(png_data)).convert("RGBA"))
 
     # 以最大尺寸为基础保存，附带所有较小尺寸
@@ -123,14 +123,14 @@ def generate_tray_pngs() -> None:
     """从 SVG 生成托盘图标 PNG（pystray 使用 Pillow Image，需要 PNG 格式）"""
     tray_icons = ["icon_idle", "icon_recording", "icon_processing"]
     try:
-        import cairosvg
+        import resvg_py
     except ImportError:
         # 检查 PNG 是否已存在
         all_exist = all((RESOURCES_DIR / f"{name}.png").exists() for name in tray_icons)
         if all_exist:
-            print("[build] cairosvg not installed, using existing PNG files")
+            print("[build] resvg_py not installed, using existing PNG files")
             return
-        print("[build] WARNING: cairosvg not installed, cannot generate tray PNGs", file=sys.stderr)
+        print("[build] WARNING: resvg_py not installed, cannot generate tray PNGs", file=sys.stderr)
         return
 
     size = 64
@@ -140,7 +140,7 @@ def generate_tray_pngs() -> None:
         if not svg_path.exists():
             print(f"[build] SVG not found: {svg_path}, skipping")
             continue
-        png_data = cairosvg.svg2png(url=str(svg_path), output_width=size, output_height=size)
+        png_data = bytes(resvg_py.svg_to_bytes(svg_path=str(svg_path), width=size, height=size))
         png_path.write_bytes(png_data)
 
     print(f"[build] Tray PNGs generated: {', '.join(tray_icons)}")

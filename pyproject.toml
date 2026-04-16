@@ -20,7 +20,7 @@ my-typeless = "my_typeless.main:main"
 [dependency-groups]
 dev = [
     "pyinstaller>=6.0",
-    "cairosvg>=2.7",
+    "resvg_py>=0.3",
 ]
 
 [build-system]
