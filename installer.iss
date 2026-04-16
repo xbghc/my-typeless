@@ -31,6 +31,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UsePreviousAppDir=yes
 ; 如果旧版本仍在运行，强制关闭（静默升级时不弹窗）
 CloseApplications=force
+; 检测运行中的实例（与 src/my_typeless/single_instance.py 的 _MUTEX_NAME 保持一致）
+AppMutex=MyTypeless_SingleInstance
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
