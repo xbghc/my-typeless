@@ -43,8 +43,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # 版本约束与 pyproject.toml [dependency-groups].dev 保持一致
-          pip install "pyinstaller>=6.0" "resvg_py>=0.3"
+          # 构建依赖从 pyproject.toml [dependency-groups].dev 读取（单一来源，避免 CI 与本地约束漂移）
+          pip install --group dev
           pip install .
 
       - name: Update version in source
