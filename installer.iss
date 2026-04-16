@@ -3,7 +3,7 @@
 ; 版本号由 CI 通过 /D 参数传入
 
 #ifndef APP_VERSION
-  #define APP_VERSION "1.0.3"
+  #define APP_VERSION "0.0.0.dev0"
 #endif
 
 [Setup]
@@ -17,7 +17,7 @@ AppSupportURL=https://github.com/xbghc/my-typeless/issues
 DefaultDirName={autopf}\MyTypeless
 DefaultGroupName=My Typeless
 OutputDir=dist
-OutputBaseFilename=MyTypeless-Setup
+OutputBaseFilename=MyTypeless-Setup-v{#APP_VERSION}
 Compression=lzma2/ultra64
 SolidCompression=yes
 SetupIconFile=src\my_typeless\resources\app_icon.ico

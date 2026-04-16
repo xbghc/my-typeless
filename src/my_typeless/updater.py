@@ -31,7 +31,7 @@ GITHUB_REPO = "my-typeless"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
 CHECK_INTERVAL_S = 4 * 60 * 60  # 4 小时
 
-ASSET_NAME = "MyTypeless-Setup.exe"
+ASSET_PREFIX = "MyTypeless-Setup"
 
 
 # ── 数据结构 ──────────────────────────────────────────────────────────────
@@ -43,6 +43,7 @@ class ReleaseInfo:
     name: str         # Release 标题
     body: str         # Release 描述 (Markdown)
     download_url: str # 可执行文件下载地址
+    asset_name: str   # 资产文件名（如 MyTypeless-Setup-v1.2.0.exe）
     size: int         # 文件大小 (bytes)
     published_at: str
 
@@ -88,17 +89,21 @@ def fetch_latest_release() -> Optional[ReleaseInfo]:
     if not version:
         return None
 
-    # 查找 exe 资产
+    # 查找 exe 资产（匹配前缀，兼容带/不带版本号的命名）
     download_url = ""
     size = 0
+    asset_name = ""
     for asset in data.get("assets", []):
-        if asset.get("name", "").lower() == ASSET_NAME.lower():
+        name = asset.get("name", "")
+        low = name.lower()
+        if low.startswith(ASSET_PREFIX.lower()) and low.endswith(".exe"):
             download_url = asset["browser_download_url"]
             size = asset.get("size", 0)
+            asset_name = name
             break
 
     if not download_url:
-        logger.info("No matching asset '%s' found in release %s", ASSET_NAME, tag)
+        logger.info("No matching asset with prefix '%s' found in release %s", ASSET_PREFIX, tag)
         return None
 
     return ReleaseInfo(
@@ -107,6 +112,7 @@ def fetch_latest_release() -> Optional[ReleaseInfo]:
         name=data.get("name", tag),
         body=data.get("body", ""),
         download_url=download_url,
+        asset_name=asset_name,
         size=size,
         published_at=data.get("published_at", ""),
     )
@@ -226,7 +232,7 @@ class UpdateChecker:
 
     def _do_download(self, release: ReleaseInfo):
         tmp_dir = Path(tempfile.mkdtemp())
-        tmp = tmp_dir / "MyTypeless-Setup.exe"
+        tmp = tmp_dir / (release.asset_name or "MyTypeless-Setup.exe")
         ok = download_release(release, tmp)
         if ok:
             self.events.emit("update_downloaded", str(tmp))
