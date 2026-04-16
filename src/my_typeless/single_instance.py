@@ -12,7 +12,7 @@ import winerror
 
 logger = logging.getLogger(__name__)
 
-_kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+_kernel32 = ctypes.windll.kernel32
 _ERROR_ALREADY_EXISTS = 183
 
 _MUTEX_NAME = "MyTypeless_SingleInstance"

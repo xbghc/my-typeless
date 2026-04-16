@@ -93,7 +93,7 @@ class TrayManager:
             )
             MB_OK = 0x00000000
             MB_ICONINFORMATION = 0x00000040
-            ctypes.windll.user32.MessageBoxW(  # type: ignore[attr-defined]
+            ctypes.windll.user32.MessageBoxW(
                 None,
                 text,
                 "About My Typeless",

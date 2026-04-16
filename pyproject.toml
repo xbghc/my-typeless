@@ -52,6 +52,8 @@ ignore = [
 [tool.pyright]
 include = ["src"]
 pythonVersion = "3.13"
+pythonPlatform = "Windows"  # 仅支持 Windows，确保 ctypes.windll 等符号正确解析
 typeCheckingMode = "basic"
 reportMissingImports = "warning"  # 规避 keyboard/pyaudio 在 ubuntu runner 上缺 stub
 reportMissingTypeStubs = "none"
+reportUnnecessaryTypeIgnoreComment = "warning"  # 防止 type:ignore 堆积

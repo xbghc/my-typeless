@@ -32,8 +32,8 @@ ULONG_PTR = ctypes.c_size_t
 LowLevelKeyboardProc = ctypes.CFUNCTYPE(LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
 
 # 设置 Win32 API 类型
-_user32 = ctypes.windll.user32  # type: ignore[attr-defined]
-_kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+_user32 = ctypes.windll.user32
+_kernel32 = ctypes.windll.kernel32
 
 _user32.CallNextHookEx.argtypes = [wintypes.HHOOK, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
 _user32.CallNextHookEx.restype = LRESULT
