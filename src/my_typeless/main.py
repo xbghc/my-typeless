@@ -16,6 +16,7 @@ from my_typeless.single_instance import (
 from my_typeless.tray import TrayManager
 from my_typeless.updater import UpdateChecker, apply_update
 from my_typeless.webview_api import SettingsAPI
+from my_typeless.window_icon import apply_window_icon
 from my_typeless.worker import Worker
 
 logger = logging.getLogger(__name__)
@@ -141,6 +142,7 @@ class MyTypelessApp:
         self._window = window
         self._api.set_window(window)
         window.events.closing += self._on_window_closing
+        window.events.shown += lambda: apply_window_icon(window)
 
         def _start_services():
             """webview 就绪后启动后台服务"""
