@@ -154,7 +154,22 @@ class MyTypelessApp:
         return 0
 
 
+def _set_app_user_model_id():
+    """设置 Windows AppUserModelID 以便任务栏正确显示应用图标"""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            # 这是一个任意但全局唯一的字符串
+            app_id = "xbghc.mytypeless.app.1"
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+        except Exception as e:
+            logger.warning(f"Failed to set AppUserModelID: {e}")
+
+
 def main():
+    _set_app_user_model_id()
+
     from my_typeless.config import CONFIG_DIR
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
