@@ -43,7 +43,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install pyinstaller resvg_py
+          # 构建依赖从 pyproject.toml [dependency-groups].dev 读取（单一来源，避免 CI 与本地约束漂移）
+          pip install --group dev
           pip install .
 
       - name: Update version in source
