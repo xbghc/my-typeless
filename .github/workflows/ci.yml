@@ -36,7 +36,7 @@ jobs:
 
   typecheck:
     name: Typecheck (pyright)
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
 
@@ -45,15 +45,13 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install pyright + narrowing deps
-        # 只装 pyright 做类型检查所需的包：
-        #   - openai / anthropic：isinstance(..., openai.AuthenticationError) 等需要真实类型
-        # 不装 pywin32（无 Linux 发行版）、pyaudio（需 portaudio 系统依赖）、
-        # keyboard、pystray、pywebview；它们在 pyproject.toml [tool.pyright] 里
-        # 被 reportMissingImports = "warning" 归为非致命警告。
+      - name: Install project + pyright
+        # 在 Windows runner 上 pip install . 可以完整安装所有运行时依赖
+        # （pywin32、pyaudio、keyboard 等），pyright 能拿到全部类型 stub。
         run: |
           pip install --upgrade pip
-          pip install pyright openai anthropic
+          pip install .
+          pip install pyright
 
       - name: pyright
         run: pyright
