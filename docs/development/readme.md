@@ -82,3 +82,47 @@ CI/CD 在 `.github/workflows/build-release.yml`，由 `v*` tag 触发：
 2. PyInstaller 打包（配置见 `my_typeless.spec`）
 3. Inno Setup 生成安装包（配置见 `installer.iss`）
 4. 创建 GitHub Release 并上传产物
+
+## 客户端更新
+
+客户端通过轮询 GitHub Releases 获取更新，相关逻辑集中在 `updater.py`，由 `main.py` 的 `MyTypelessApp` 组装。
+
+### 触发时机
+
+- 应用启动后 `webview` 就绪时立即检查一次（`UpdateChecker.start(immediate=True)`）
+- 此后每 4 小时轮询一次（`CHECK_INTERVAL_S`，`threading.Timer` 驱动，守护线程）
+- 开发版本（`__version__` 含 `.dev`）跳过检查，避免本地调试触发升级
+
+### 检查流程
+
+1. 请求 `GET https://api.github.com/repos/xbghc/my-typeless/releases/latest`
+   - `Accept: application/vnd.github+json`
+   - `User-Agent: MyTypeless/<version>`
+   - 超时 15 s
+2. 在 `assets` 中匹配 **文件名以 `MyTypeless-Setup` 开头且以 `.exe` 结尾** 的安装包
+3. 用 `is_newer()` 比较版本：去掉 `v` 前缀与 `-rc1` 等预发布后缀后，按点号拆成 `tuple[int, ...]` 比较
+4. 若远端更新，发射 `update_available(ReleaseInfo)` 事件
+
+### 下载与安装
+
+1. `MyTypelessApp._on_update_available` 收到事件后：
+   - 通过托盘气泡提示新版本号与文件大小
+   - 立即调用 `UpdateChecker.download(release)` 在后台线程下载
+2. 下载到系统临时目录（`tempfile.mkdtemp()`），写入时按 64 KB 分块，失败会清理临时文件
+3. 下载成功发射 `update_downloaded(path)`；失败发射 `update_error(msg)`
+4. `MyTypelessApp._on_update_downloaded` 调用 `apply_update()`：
+   - 用 `/SILENT /SUPPRESSMSGBOXES` 参数静默启动 Inno Setup 安装程序
+   - 启动成功后调用 `_quit()` 退出当前实例，让安装程序覆盖文件
+5. 安装程序运行结束后由 Inno Setup 决定是否重启应用（见 `installer.iss`）
+
+### 事件契约
+
+`UpdateChecker.events`（`EventEmitter`）对外暴露三个事件：
+
+| 事件 | 参数 | 说明 |
+|------|------|------|
+| `update_available` | `ReleaseInfo` | 发现新版本，尚未下载 |
+| `update_downloaded` | `str` | 安装程序已下载，值为本地路径 |
+| `update_error` | `str` | 网络或下载失败的错误描述 |
+
+当前实现为"发现即自动下载自动安装"，用户只会看到托盘通知。如需改为用户确认再升级，在 `_on_update_available` 中去掉自动 `download()` 调用，并在 UI 侧增加交互入口即可，其它环节无需改动。
