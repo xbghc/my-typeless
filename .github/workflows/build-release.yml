@@ -48,7 +48,9 @@ jobs:
           pip install .
 
       - name: Update version in source
-        run: python scripts/build.py --version ${{ steps.version.outputs.version }} --no-build
+        env:
+          MY_TYPELESS_VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/build.py --no-build
 
       - name: Build with PyInstaller
         run: |

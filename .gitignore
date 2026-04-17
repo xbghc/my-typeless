@@ -11,6 +11,9 @@ wheels/
 file_version_info.txt
 *.old
 
+# Build-time injected version (CI generates this; source tree stays at 0.0.0.dev0)
+src/my_typeless/_version.py
+
 # Generated icons (built from SVG by scripts/build.py)
 src/my_typeless/resources/*.ico
 src/my_typeless/resources/*.png

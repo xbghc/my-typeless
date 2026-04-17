@@ -65,7 +65,7 @@ PyWebView 桥接 HTML/JS 前端（Tailwind CSS）与 Python 后端。`webview_ap
 
 ### 版本管理
 
-版本号不手动维护。CI/CD 通过 `scripts/build.py` 在发布时注入到 `version.py`。本地开发时 version 为 `0.0.0.dev0`。
+`version.py` 在源树中始终为 `0.0.0.dev0`，永不手动修改。CI 通过环境变量 `MY_TYPELESS_VERSION` 调用 `scripts/build.py`，脚本生成 gitignored 的 `_version.py` 覆盖；运行时 `version.py` 优先 import `_version`，缺失时回落到 dev 值。本地构建可 `python scripts/build.py --version X.Y.Z`，同样只写 `_version.py`，源树保持干净。
 
 ## Build & Release
 
