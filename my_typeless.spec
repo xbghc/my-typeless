@@ -35,6 +35,7 @@ a = Analysis(
         "my_typeless.tray",
         "my_typeless.worker",
         "my_typeless.version",
+        "my_typeless._version",  # 由 scripts/build.py 在打包前生成；version.py 通过 try-import 引用
         "my_typeless.updater",
         # PyQt6 相关
         "PyQt6.QtCore",

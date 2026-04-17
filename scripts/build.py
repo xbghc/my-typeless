@@ -184,11 +184,11 @@ def main():
     args = parser.parse_args()
 
     version, source = resolve_version(args.version)
+    write_build_version(version)
     if source is not None:
-        write_build_version(version)
         print(f"[build] Building version {version} (from {source})")
     else:
-        print(f"[build] No version specified; using dev fallback {version} (no _version.py written)")
+        print(f"[build] No version specified; using dev fallback {version}")
 
     generate_version_info(version)
     generate_ico()
