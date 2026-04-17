@@ -6,6 +6,8 @@ import sys
 from ctypes import wintypes
 from pathlib import Path
 
+from my_typeless.icon_builder import ensure_app_ico
+
 logger = logging.getLogger(__name__)
 
 WM_SETICON = 0x0080
@@ -17,10 +19,8 @@ LR_SHARED = 0x00008000
 SM_CXICON = 11
 SM_CXSMICON = 49
 
-_ICO_PATH = Path(__file__).parent / "resources" / "app_icon.ico"
 
-
-def _load_hicon(size: int):
+def _load_hicon(ico_path: Path, size: int):
     user32 = ctypes.windll.user32
     user32.LoadImageW.restype = wintypes.HANDLE
     user32.LoadImageW.argtypes = [
@@ -33,7 +33,7 @@ def _load_hicon(size: int):
     ]
     return user32.LoadImageW(
         None,
-        str(_ICO_PATH),
+        str(ico_path),
         IMAGE_ICON,
         size,
         size,
@@ -45,8 +45,9 @@ def apply_window_icon(window) -> None:
     """为 pywebview 窗口的 HWND 设置应用图标"""
     if sys.platform != "win32":
         return
-    if not _ICO_PATH.exists():
-        logger.info("app_icon.ico not found at %s; skipping HWND icon", _ICO_PATH)
+    ico_path = ensure_app_ico()
+    if ico_path is None:
+        logger.info("app_icon.ico unavailable; skipping HWND icon")
         return
     try:
         hwnd = int(getattr(window, "native_handle", 0) or 0)
@@ -59,8 +60,8 @@ def apply_window_icon(window) -> None:
         user32 = ctypes.windll.user32
         big = user32.GetSystemMetrics(SM_CXICON) or 32
         small = user32.GetSystemMetrics(SM_CXSMICON) or 16
-        h_big = _load_hicon(big)
-        h_small = _load_hicon(small)
+        h_big = _load_hicon(ico_path, big)
+        h_small = _load_hicon(ico_path, small)
         if h_big:
             user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_big)
         if h_small:

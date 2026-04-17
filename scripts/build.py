@@ -4,7 +4,6 @@
 """
 
 import argparse
-import io
 import re
 import subprocess
 import sys
@@ -91,40 +90,18 @@ VSVersionInfo(
 
 
 def generate_ico() -> None:
-    """从 app_icon.svg 生成包含多分辨率层的 app_icon.ico"""
-    svg_path = RESOURCES_DIR / "app_icon.svg"
-    ico_path = RESOURCES_DIR / "app_icon.ico"
-    if not svg_path.exists():
-        print(f"[build] SVG not found: {svg_path}, skipping ICO generation")
-        return
+    """从 app_icon.svg 生成包含多分辨率层的 app_icon.ico（委托到共享模块）"""
+    sys.path.insert(0, str(ROOT / "src"))
+    from my_typeless.icon_builder import ICO_PATH, ensure_app_ico
 
-    try:
-        import resvg_py
-        from PIL import Image
-    except ImportError:
-        if ico_path.exists():
-            print("[build] resvg_py/Pillow not installed, using existing ICO file")
-            return
+    result = ensure_app_ico()
+    if result is None and not ICO_PATH.exists():
         print(
-            "[build] ERROR: resvg_py/Pillow required for ICO generation but not installed",
+            "[build] ERROR: ICO generation failed (needs resvg_py + Pillow)",
             file=sys.stderr,
         )
         sys.exit(1)
-
-    sizes = [16, 24, 32, 48, 64, 128, 256]
-    images = []
-    for size in sizes:
-        png_data = bytes(resvg_py.svg_to_bytes(svg_path=str(svg_path), width=size, height=size))
-        images.append(Image.open(io.BytesIO(png_data)).convert("RGBA"))
-
-    # 以最大尺寸为基础保存，附带所有较小尺寸
-    images[-1].save(
-        ico_path,
-        format="ICO",
-        sizes=[(s, s) for s in sizes],
-        append_images=images[:-1],
-    )
-    print(f"[build] ICO generated: {ico_path} ({len(sizes)} sizes)")
+    print(f"[build] ICO ready: {ICO_PATH}")
 
 
 def generate_tray_pngs() -> None:
