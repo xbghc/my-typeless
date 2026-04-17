@@ -23,6 +23,7 @@ a = Analysis(
         (str(RESOURCES / "*.ico"), "my_typeless/resources"),
         (str(RESOURCES / "*.svg"), "my_typeless/resources"),
         (str(RESOURCES / "*.png"), "my_typeless/resources"),
+        (str(SRC / "web" / "*"), "my_typeless/web"),
     ],
     hiddenimports=[
         "my_typeless",
