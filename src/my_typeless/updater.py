@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+from my_typeless.config import DEV_MODE
 from my_typeless.events import EventEmitter
 from my_typeless.version import __version__
 
@@ -226,8 +227,8 @@ class UpdateChecker:
         threading.Thread(target=self._do_download, args=(release,), daemon=True).start()
 
     def _do_check(self):
-        if ".dev" in __version__:
-            logger.debug("Skip update check in dev mode (version=%s)", __version__)
+        if DEV_MODE:
+            logger.debug("Skip update check in dev mode (MY_TYPELESS_DEV=1)")
             return
         release = fetch_latest_release()
         if release and is_newer(release.version):
