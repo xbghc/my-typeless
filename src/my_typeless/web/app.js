@@ -157,11 +157,6 @@ function togglePasswordVisibility(btn) {
     }
 }
 
-// ── Test Connection ──
-
-}
-
-
 // ── Test Connection (Provider Modal) ──
 
 async function testModalConnection() {
