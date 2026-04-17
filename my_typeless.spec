@@ -22,6 +22,7 @@ a = Analysis(
         # 打包资源文件
         (str(RESOURCES / "*.ico"), "my_typeless/resources"),
         (str(RESOURCES / "*.svg"), "my_typeless/resources"),
+        (str(RESOURCES / "*.png"), "my_typeless/resources"),
     ],
     hiddenimports=[
         "my_typeless",
