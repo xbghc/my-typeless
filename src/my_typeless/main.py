@@ -21,7 +21,28 @@ from my_typeless.worker import Worker
 
 logger = logging.getLogger(__name__)
 
-_WEB_DIR = Path(__file__).parent / "web"
+
+def _resolve_web_dir() -> Path:
+    """Return the bundled web UI directory in both source and PyInstaller builds."""
+    module_dir = Path(__file__).resolve().parent
+    candidates = [module_dir / "web"]
+
+    # In one-file PyInstaller builds, the entry script may live directly under
+    # sys._MEIPASS while package data is unpacked under sys._MEIPASS/my_typeless.
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        bundle_dir = Path(getattr(sys, "_MEIPASS"))
+        candidates.insert(0, bundle_dir / "my_typeless" / "web")
+        candidates.append(bundle_dir / "web")
+
+    for web_dir in candidates:
+        if (web_dir / "index.html").exists():
+            return web_dir
+
+    logger.error("Web UI not found. Tried: %s", ", ".join(str(p) for p in candidates))
+    return candidates[0]
+
+
+_WEB_DIR = _resolve_web_dir()
 
 
 class MyTypelessApp:
