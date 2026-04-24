@@ -21,6 +21,7 @@ my-typeless = "my_typeless.main:main"
 dev = [
     "pyinstaller>=6.0",
     "resvg_py>=0.3",
+    "pytest>=8.3",
     "ruff>=0.6",
     "pyright>=1.1.380",
 ]
@@ -57,3 +58,7 @@ typeCheckingMode = "basic"
 reportMissingImports = "warning"  # 规避 keyboard/pyaudio 在 ubuntu runner 上缺 stub
 reportMissingTypeStubs = "none"
 reportUnnecessaryTypeIgnoreComment = "warning"  # 防止 type:ignore 堆积
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
