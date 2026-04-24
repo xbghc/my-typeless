@@ -220,9 +220,8 @@ async function testModalConnection() {
 
     const model = modalModels[0]; // Test the first model
 
-    const originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Testing...';
+    setButtonContent(btn, 'progress_activity', 'Testing...', 'text-[16px] animate-spin');
 
     try {
         let result;
@@ -235,21 +234,21 @@ async function testModalConnection() {
         }
 
         if (result.success) {
-            btn.innerHTML = '<span class="material-symbols-outlined text-[16px] text-green-500">check_circle</span> Success';
+            setButtonContent(btn, 'check_circle', 'Success', 'text-[16px] text-green-500');
             setTimeout(() => {
                 if (!btn.disabled) return;
                 btn.disabled = false;
-                btn.innerHTML = originalText;
+                setModalTestButtonDefault(btn);
             }, 2000);
         } else {
             alert('Connection failed: ' + (result.error || 'Unknown'));
             btn.disabled = false;
-            btn.innerHTML = originalText;
+            setModalTestButtonDefault(btn);
         }
     } catch (e) {
         alert('Connection failed: ' + e);
         btn.disabled = false;
-        btn.innerHTML = originalText;
+        setModalTestButtonDefault(btn);
     }
 }
 
@@ -258,15 +257,34 @@ async function testModalConnection() {
 
 function renderGlossary() {
     const list = document.getElementById('glossaryList');
+    list.replaceChildren();
+
     if (glossaryTerms.length === 0) {
-        list.innerHTML = '<p class="text-center text-text-muted text-sm py-8">No terms added yet.</p>';
+        list.appendChild(createStatusMessage('No terms added yet.'));
     } else {
-        list.innerHTML = glossaryTerms.map((term, i) => `
-            <div class="flex items-center px-4 py-3 border-b border-border-gray group hover:bg-neutral-50 transition-colors" data-index="${i}" onclick="toggleGlossarySelect(this)">
-                <input type="checkbox" class="rounded border-border-gray text-primary focus:ring-0 cursor-pointer size-4" onclick="event.stopPropagation(); toggleGlossarySelect(this.parentElement)"/>
-                <span class="ml-4 text-sm font-medium text-primary">${escapeHtml(term)}</span>
-            </div>
-        `).join('');
+        const fragment = document.createDocumentFragment();
+        glossaryTerms.forEach((term, i) => {
+            const item = document.createElement('div');
+            item.className = 'flex items-center px-4 py-3 border-b border-border-gray group hover:bg-neutral-50 transition-colors';
+            item.dataset.index = String(i);
+            item.addEventListener('click', () => toggleGlossarySelect(item));
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'rounded border-border-gray text-primary focus:ring-0 cursor-pointer size-4';
+            checkbox.addEventListener('click', (event) => {
+                event.stopPropagation();
+                item.classList.toggle('bg-neutral-50', checkbox.checked);
+            });
+
+            const text = document.createElement('span');
+            text.className = 'ml-4 text-sm font-medium text-primary';
+            text.textContent = safeText(term);
+
+            item.append(checkbox, text);
+            fragment.appendChild(item);
+        });
+        list.appendChild(fragment);
     }
     document.getElementById('glossaryCount').textContent = `${glossaryTerms.length} term(s)`;
 }
@@ -285,10 +303,9 @@ function addGlossaryTerm() {
 
 function toggleGlossarySelect(el) {
     const checkbox = el.querySelector('input[type="checkbox"]');
-    if (checkbox && document.activeElement !== checkbox) {
-        checkbox.checked = !checkbox.checked;
-    }
-    el.classList.toggle('bg-neutral-50', checkbox?.checked);
+    if (!checkbox) return;
+    checkbox.checked = !checkbox.checked;
+    el.classList.toggle('bg-neutral-50', checkbox.checked);
 }
 
 function deleteSelectedTerms() {
@@ -321,7 +338,7 @@ async function runTest() {
     const llmOverride = null; // Will use active backend config implicitly
 
     runBtn.disabled = true;
-    runBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Running...';
+    setButtonContent(runBtn, 'progress_activity', 'Running...', 'text-[16px] animate-spin');
     output.value = '';
     statusDot.className = 'w-2 h-2 rounded-full bg-primary';
     statusText.textContent = 'Calling LLM...';
@@ -341,7 +358,7 @@ async function runTest() {
         statusText.textContent = `Error: ${e}`;
     } finally {
         runBtn.disabled = false;
-        runBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">play_arrow</span> Run';
+        setButtonContent(runBtn, 'play_arrow', 'Run');
     }
 }
 
@@ -357,29 +374,49 @@ let historyLoading = false;
 let historyHasMore = true;
 
 function renderHistoryEntry(e) {
-    return `
-        <div class="border border-gray-200 rounded-lg overflow-hidden bg-white flex flex-col">
-            <div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-                <span class="text-[10px] font-medium text-gray-500 uppercase tracking-tight">${escapeHtml(e.timestamp)}</span>
-            </div>
-            <div class="grid grid-cols-2 min-h-[80px]">
-                <div class="p-4 border-r border-gray-100">
-                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Input</label>
-                    <p class="text-sm text-gray-600 leading-relaxed">${escapeHtml(e.raw_input)}</p>
-                </div>
-                <div class="p-4">
-                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Output</label>
-                    <p class="text-sm text-primary font-medium leading-relaxed">${escapeHtml(e.refined_output)}</p>
-                </div>
-            </div>
-        </div>`;
+    const card = document.createElement('div');
+    card.className = 'border border-gray-200 rounded-lg overflow-hidden bg-white flex flex-col';
+
+    const header = document.createElement('div');
+    header.className = 'px-4 py-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center';
+    const timestamp = document.createElement('span');
+    timestamp.className = 'text-[10px] font-medium text-gray-500 uppercase tracking-tight';
+    timestamp.textContent = safeText(e.timestamp);
+    header.appendChild(timestamp);
+
+    const content = document.createElement('div');
+    content.className = 'grid grid-cols-2 min-h-[80px]';
+
+    const inputColumn = document.createElement('div');
+    inputColumn.className = 'p-4 border-r border-gray-100';
+    const inputLabel = document.createElement('label');
+    inputLabel.className = 'block text-[10px] font-bold text-gray-400 uppercase mb-2';
+    inputLabel.textContent = 'Input';
+    const inputText = document.createElement('p');
+    inputText.className = 'text-sm text-gray-600 leading-relaxed';
+    inputText.textContent = safeText(e.raw_input);
+    inputColumn.append(inputLabel, inputText);
+
+    const outputColumn = document.createElement('div');
+    outputColumn.className = 'p-4';
+    const outputLabel = document.createElement('label');
+    outputLabel.className = 'block text-[10px] font-bold text-gray-400 uppercase mb-2';
+    outputLabel.textContent = 'Output';
+    const outputText = document.createElement('p');
+    outputText.className = 'text-sm text-primary font-medium leading-relaxed';
+    outputText.textContent = safeText(e.refined_output);
+    outputColumn.append(outputLabel, outputText);
+
+    content.append(inputColumn, outputColumn);
+    card.append(header, content);
+    return card;
 }
 
 async function loadHistory() {
     historyOffset = 0;
     historyHasMore = true;
     historyLoading = false;
-    document.getElementById('historyList').innerHTML = '';
+    document.getElementById('historyList').replaceChildren();
     await loadMoreHistory();
 }
 
@@ -394,13 +431,17 @@ async function loadMoreHistory() {
         if (data.next_offset != null) historyOffset = data.next_offset;
 
         if (entries.length === 0 && historyOffset === 0) {
-            list.innerHTML = '<p class="text-center text-text-muted text-sm py-8">No history entries yet.</p>';
+            list.replaceChildren(createStatusMessage('No history entries yet.'));
         } else {
-            list.insertAdjacentHTML('beforeend', entries.map(renderHistoryEntry).join(''));
+            const fragment = document.createDocumentFragment();
+            entries.forEach((entry) => {
+                fragment.appendChild(renderHistoryEntry(entry));
+            });
+            list.appendChild(fragment);
         }
     } catch (e) {
         if (historyOffset === 0) {
-            list.innerHTML = `<p class="text-center text-text-muted text-sm py-8">Failed to load history: ${e}</p>`;
+            list.replaceChildren(createStatusMessage(`Failed to load history: ${e}`));
         }
     } finally {
         historyLoading = false;
@@ -422,8 +463,7 @@ async function clearAllHistory() {
         historyOffset = 0;
         historyHasMore = true;
         historyLoading = false;
-        document.getElementById('historyList').innerHTML =
-            '<p class="text-center text-text-muted text-sm py-8">No history entries yet.</p>';
+        document.getElementById('historyList').replaceChildren(createStatusMessage('No history entries yet.'));
     } catch (e) {
         alert('Failed: ' + e);
     }
@@ -455,6 +495,45 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+function setButtonContent(button, iconName, label, iconClass = 'text-[16px]') {
+    const icon = document.createElement('span');
+    icon.className = `material-symbols-outlined ${iconClass}`;
+    icon.textContent = iconName;
+    const text = document.createElement('span');
+    text.textContent = label;
+    button.replaceChildren(icon, text);
+}
+
+function setModalTestButtonDefault(button) {
+    setButtonContent(button, 'link', 'Test Connection');
+}
+
+function safeText(value) {
+    return value == null ? '' : String(value);
+}
+
+function createStatusMessage(text) {
+    const message = document.createElement('p');
+    message.className = 'text-center text-text-muted text-sm py-8';
+    message.textContent = text;
+    return message;
+}
+
+function createOption(value, label, selected = false) {
+    const option = document.createElement('option');
+    option.value = safeText(value);
+    option.textContent = safeText(label);
+    option.selected = selected;
+    return option;
+}
+
+function createIcon(name, className = '') {
+    const icon = document.createElement('span');
+    icon.className = `material-symbols-outlined ${className}`.trim();
+    icon.textContent = name;
+    return icon;
 }
 
 function normalizeProviders(providers) {
@@ -508,14 +587,14 @@ function renderProviderDropdown(type) {
     activeModel = resolveActiveModel(providers, activeId, activeModel);
 
     if (providers.length === 0) {
-        providerSelect.innerHTML = '<option value="">No providers</option>';
-        modelSelect.innerHTML = '<option value="">N/A</option>';
+        providerSelect.replaceChildren(createOption('', 'No providers'));
+        modelSelect.replaceChildren(createOption('', 'N/A'));
         activeId = '';
         activeModel = '';
     } else {
-        providerSelect.innerHTML = providers.map(p =>
-            `<option value="${escapeHtml(p.id)}" ${p.id === activeId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
-        ).join('');
+        providerSelect.replaceChildren(
+            ...providers.map((p) => createOption(p.id, p.name, p.id === activeId))
+        );
         providerSelect.value = activeId;
         updateModelDropdown(type, activeId, activeModel);
     }
@@ -528,9 +607,6 @@ function renderProviderDropdown(type) {
         activeLlmModel = activeModel;
     }
 
-    if (providers.length === 0) {
-        return;
-    }
 }
 
 function updateModelDropdown(type, providerId, selectedModel) {
@@ -538,18 +614,19 @@ function updateModelDropdown(type, providerId, selectedModel) {
     const provider = providers.find(p => p.id === providerId);
     const modelSelect = document.getElementById(`${type}ActiveModel`);
     if (!modelSelect) return;
+    const models = Array.isArray(provider?.models) ? provider.models : [];
 
-    if (!provider || !provider.models || provider.models.length === 0) {
-        modelSelect.innerHTML = '<option value="">No models</option>';
+    if (models.length === 0) {
+        modelSelect.replaceChildren(createOption('', 'No models'));
         if (type === 'stt') activeSttModel = '';
         else activeLlmModel = '';
         return;
     }
 
-    const activeModel = provider.models.includes(selectedModel) ? selectedModel : provider.models[0];
-    modelSelect.innerHTML = provider.models.map(m =>
-        `<option value="${escapeHtml(m)}" ${m === activeModel ? 'selected' : ''}>${escapeHtml(m)}</option>`
-    ).join('');
+    const activeModel = models.includes(selectedModel) ? selectedModel : models[0];
+    modelSelect.replaceChildren(
+        ...models.map((m) => createOption(m, m, m === activeModel))
+    );
     modelSelect.value = activeModel;
 
     if (type === 'stt') activeSttModel = activeModel;
@@ -576,42 +653,80 @@ function renderProviderList(type) {
     const providers = type === 'stt' ? sttProviders : llmProviders;
     const list = document.getElementById(`${type}ProviderList`);
     if (!list) return;
+    list.replaceChildren();
 
     if (providers.length === 0) {
-        list.innerHTML = `<tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">No providers configured. Click "New Provider" to add one.</td></tr>`;
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 4;
+        cell.className = 'px-6 py-8 text-center text-gray-500';
+        cell.textContent = 'No providers configured. Click "New Provider" to add one.';
+        row.appendChild(cell);
+        list.appendChild(row);
         return;
     }
 
-    list.innerHTML = providers.map(p => {
-        const models = Array.isArray(p.models) ? p.models : [];
-        const modelsHtml = models.map(m => `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">${escapeHtml(m)}</span>`).join(' ');
+    const fragment = document.createDocumentFragment();
+    providers.forEach((p) => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50 transition-colors group';
 
-        return `
-            <tr class="hover:bg-gray-50 transition-colors group">
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="font-semibold text-primary">${escapeHtml(p.name)}</div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-gray-500 font-mono text-xs">
-                    ${escapeHtml(p.base_url)}
-                </td>
-                <td class="px-6 py-4">
-                    <div class="flex flex-wrap gap-1">
-                        ${modelsHtml || '<span class="text-gray-400 text-xs italic">No models</span>'}
-                    </div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onclick="editProvider('${type}', '${escapeHtml(p.id)}')" class="p-1 text-gray-400 hover:text-primary transition-colors" title="Edit">
-                            <span class="material-symbols-outlined text-[18px]">edit</span>
-                        </button>
-                        <button onclick="deleteProvider('${type}', '${escapeHtml(p.id)}')" class="p-1 text-gray-400 hover:text-red-600 transition-colors" title="Delete">
-                            <span class="material-symbols-outlined text-[18px]">delete</span>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
+        const nameCell = document.createElement('td');
+        nameCell.className = 'px-6 py-4 whitespace-nowrap';
+        const name = document.createElement('div');
+        name.className = 'font-semibold text-primary';
+        name.textContent = safeText(p.name);
+        nameCell.appendChild(name);
+
+        const urlCell = document.createElement('td');
+        urlCell.className = 'px-6 py-4 whitespace-nowrap text-gray-500 font-mono text-xs';
+        urlCell.textContent = safeText(p.base_url);
+
+        const modelsCell = document.createElement('td');
+        modelsCell.className = 'px-6 py-4';
+        const modelsWrapper = document.createElement('div');
+        modelsWrapper.className = 'flex flex-wrap gap-1';
+        const models = Array.isArray(p.models) ? p.models : [];
+        if (models.length === 0) {
+            const empty = document.createElement('span');
+            empty.className = 'text-gray-400 text-xs italic';
+            empty.textContent = 'No models';
+            modelsWrapper.appendChild(empty);
+        } else {
+            models.forEach((model) => {
+                const modelTag = document.createElement('span');
+                modelTag.className = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200';
+                modelTag.textContent = safeText(model);
+                modelsWrapper.appendChild(modelTag);
+            });
+        }
+        modelsCell.appendChild(modelsWrapper);
+
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'px-6 py-4 whitespace-nowrap text-right text-sm font-medium';
+        const actions = document.createElement('div');
+        actions.className = 'flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity';
+
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'p-1 text-gray-400 hover:text-primary transition-colors';
+        editButton.title = 'Edit';
+        editButton.addEventListener('click', () => editProvider(type, p.id));
+        editButton.appendChild(createIcon('edit', 'text-[18px]'));
+
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'p-1 text-gray-400 hover:text-red-600 transition-colors';
+        deleteButton.title = 'Delete';
+        deleteButton.addEventListener('click', () => deleteProvider(type, p.id));
+        deleteButton.appendChild(createIcon('delete', 'text-[18px]'));
+
+        actions.append(editButton, deleteButton);
+        actionsCell.appendChild(actions);
+        row.append(nameCell, urlCell, modelsCell, actionsCell);
+        fragment.appendChild(row);
+    });
+    list.appendChild(fragment);
 }
 
 // ── Modal Logic ──
@@ -625,9 +740,9 @@ function openProviderModal(type, providerId = null) {
 
     document.getElementById('modalProviderId').value = providerId || '';
     document.getElementById('modalProviderApiType').value = provider?.provider_type || 'openai';
-    document.getElementById('modalProviderName').value = provider ? provider.name : '';
-    document.getElementById('modalProviderUrl').value = provider ? provider.base_url : '';
-    document.getElementById('modalProviderKey').value = provider ? provider.api_key : '';
+    document.getElementById('modalProviderName').value = provider ? safeText(provider.name) : '';
+    document.getElementById('modalProviderUrl').value = provider ? safeText(provider.base_url) : '';
+    document.getElementById('modalProviderKey').value = provider ? safeText(provider.api_key) : '';
 
     const keyInput = document.getElementById('modalProviderKey');
     const icon = keyInput.nextElementSibling.querySelector('.material-symbols-outlined');
@@ -662,14 +777,26 @@ function closeProviderModal() {
 
 function renderModalModels() {
     const container = document.getElementById('modalModelsContainer');
-    container.innerHTML = modalModels.map((m, i) => `
-        <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-sm font-medium text-primary">
-            ${escapeHtml(m)}
-            <button onclick="removeModalModel(${i})" class="text-gray-400 hover:text-red-500 rounded-full flex items-center justify-center p-0.5">
-                <span class="material-symbols-outlined text-[14px]">close</span>
-            </button>
-        </div>
-    `).join('');
+    container.replaceChildren();
+
+    const fragment = document.createDocumentFragment();
+    modalModels.forEach((m, i) => {
+        const tag = document.createElement('div');
+        tag.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-gray-100 border border-gray-200 text-sm font-medium text-primary';
+
+        const label = document.createElement('span');
+        label.textContent = safeText(m);
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'text-gray-400 hover:text-red-500 rounded-full flex items-center justify-center p-0.5';
+        button.addEventListener('click', () => removeModalModel(i));
+        button.appendChild(createIcon('close', 'text-[14px]'));
+
+        tag.append(label, button);
+        fragment.appendChild(tag);
+    });
+    container.appendChild(fragment);
 }
 
 function handleModelInputKeyDown(e) {
