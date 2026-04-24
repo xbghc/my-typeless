@@ -24,9 +24,12 @@ python scripts/build.py --version 1.0.0 --no-build
 # 静态检查
 uv run ruff check src
 uv run pyright
+
+# 运行测试
+uv run pytest
 ```
 
-暂无测试套件；静态检查使用 Ruff 和 Pyright，配置见 `pyproject.toml`。
+测试框架使用 pytest；静态检查使用 Ruff 和 Pyright，配置见 `pyproject.toml`。
 
 ## Architecture
 
