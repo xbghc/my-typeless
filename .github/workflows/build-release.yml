@@ -36,16 +36,16 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building version: $VERSION"
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # 构建依赖从 pyproject.toml [dependency-groups].dev 读取（单一来源，避免 CI 与本地约束漂移）
-          pip install --group dev
-          pip install .
+          # 使用 uv 读取 pyproject.toml 的 dependency-groups，避免 pip --group 版本兼容问题
+          pip install uv
+          uv sync --group dev
 
       - name: Update version in source
         env:
@@ -54,7 +54,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          pyinstaller my_typeless.spec --clean --noconfirm
+          uv run pyinstaller my_typeless.spec --clean --noconfirm
 
       - name: Verify output
         run: |
@@ -120,8 +120,8 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -131,7 +131,7 @@ jobs:
           merge-multiple: true
 
       - name: List artifacts
-        run: ls -lhR artifacts/
+        run: find artifacts -maxdepth 2 -type f -print
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
