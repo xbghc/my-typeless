@@ -3,6 +3,13 @@
 let currentConfig = {};
 let currentHotkey = 'right alt';
 let glossaryTerms = [];
+let sttProviders = [];
+let llmProviders = [];
+let activeSttProviderId = '';
+let activeSttModel = '';
+let activeLlmProviderId = '';
+let activeLlmModel = '';
+let modalModels = [];
 
 // ── Initialization ──
 
@@ -23,31 +30,40 @@ window.addEventListener('pywebviewready', async () => {
 
 function populateForms(config) {
     // General
-    document.getElementById('hotkeyBtn').textContent = config.hotkey;
-    document.getElementById('autostartToggle').checked = config.start_with_windows;
+    setText('hotkeyBtn', config.hotkey || currentHotkey);
+    setChecked('autostartToggle', !!config.start_with_windows);
 
     // STT
-    document.getElementById('sttUrl').value = config.stt?.base_url || '';
-    document.getElementById('sttKey').value = config.stt?.api_key || '';
-    document.getElementById('sttModel').value = config.stt?.model || '';
+    sttProviders = normalizeProviders(config.stt?.providers);
+    activeSttProviderId = resolveActiveProviderId(sttProviders, config.stt?.active_provider_id);
+    activeSttModel = resolveActiveModel(sttProviders, activeSttProviderId, config.stt?.active_model);
+    renderProviderList('stt');
+    renderProviderDropdown('stt');
 
     // LLM
-    document.getElementById('llmUrl').value = config.llm?.base_url || '';
-    document.getElementById('llmKey').value = config.llm?.api_key || '';
-    document.getElementById('llmModel').value = config.llm?.model || '';
-    document.getElementById('llmPrompt').value = config.llm?.prompt || '';
+    llmProviders = normalizeProviders(config.llm?.providers);
+    activeLlmProviderId = resolveActiveProviderId(llmProviders, config.llm?.active_provider_id);
+    activeLlmModel = resolveActiveModel(llmProviders, activeLlmProviderId, config.llm?.active_model);
+    const activeLlmProvider = findProvider(llmProviders, activeLlmProviderId);
+    setValue('llmUrl', activeLlmProvider?.base_url || '');
+    setValue('llmKey', activeLlmProvider?.api_key || '');
+    setValue('llmModel', activeLlmModel || '');
+    setValue('llmPrompt', config.llm?.prompt || '');
+    renderProviderList('llm');
+    renderProviderDropdown('llm');
 
     // Glossary
     glossaryTerms = [...(config.glossary || [])];
     renderGlossary();
 
     // Update status badges
-    updateStatusBadge('sttStatusBadge', !!config.stt?.api_key);
-    updateStatusBadge('llmStatusBadge', !!config.llm?.api_key);
+    updateStatusBadge('sttStatusBadge', !!findProvider(sttProviders, activeSttProviderId)?.api_key);
+    updateStatusBadge('llmStatusBadge', !!activeLlmProvider?.api_key);
 }
 
 function updateStatusBadge(id, active) {
     const badge = document.getElementById(id);
+    if (!badge) return;
     if (active) {
         badge.textContent = 'ACTIVE';
         badge.className = 'px-2.5 py-1 bg-primary text-white text-[10px] font-bold rounded tracking-widest';
@@ -104,23 +120,49 @@ function cancelSettings() {
 }
 
 function collectFormData() {
+    const sttProviderId = getValue('sttActiveProvider') || activeSttProviderId;
+    const sttModel = getValue('sttActiveModel') || activeSttModel;
+    activeSttProviderId = resolveActiveProviderId(sttProviders, sttProviderId);
+    activeSttModel = sttModel || resolveActiveModel(sttProviders, activeSttProviderId, '');
+
+    const llmProvider = findProvider(llmProviders, activeLlmProviderId);
+    const llmUrl = getValue('llmUrl').trim();
+    const llmKey = getValue('llmKey').trim();
+    const llmModel = getValue('llmModel').trim();
+    if (llmProvider) {
+        llmProvider.base_url = llmUrl;
+        llmProvider.api_key = llmKey;
+        if (llmModel) {
+            llmProvider.models = [llmModel, ...(llmProvider.models || []).filter(m => m !== llmModel)];
+        }
+        activeLlmModel = llmModel || resolveActiveModel(llmProviders, activeLlmProviderId, activeLlmModel);
+    }
+
     return {
         hotkey: currentHotkey,
-        start_with_windows: document.getElementById('autostartToggle').checked,
+        start_with_windows: !!document.getElementById('autostartToggle')?.checked,
         stt: {
-            base_url: document.getElementById('sttUrl').value.trim(),
-            api_key: document.getElementById('sttKey').value.trim(),
-            model: document.getElementById('sttModel').value.trim(),
+            providers: sttProviders,
+            active_provider_id: activeSttProviderId,
+            active_model: activeSttModel,
             language: currentConfig.stt?.language || '',
         },
         llm: {
-            base_url: document.getElementById('llmUrl').value.trim(),
-            api_key: document.getElementById('llmKey').value.trim(),
-            model: document.getElementById('llmModel').value.trim(),
-            prompt: document.getElementById('llmPrompt').value.trim(),
+            providers: llmProviders,
+            active_provider_id: activeLlmProviderId,
+            active_model: activeLlmModel,
+            prompt: getValue('llmPrompt').trim(),
         },
         glossary: [...glossaryTerms],
     };
+}
+
+async function applyConfig() {
+    const result = await pywebview.api.save_config(collectFormData());
+    if (!result.success) {
+        alert('Save failed: ' + (result.error || 'Unknown error'));
+    }
+    return result;
 }
 
 // ── Hotkey Capture ──
@@ -389,11 +431,60 @@ async function clearAllHistory() {
 
 // ── Utilities ──
 
+function getValue(id) {
+    return document.getElementById(id)?.value || '';
+}
+
+function setValue(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value || '';
+}
+
+function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value || '';
+}
+
+function setChecked(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.checked = !!value;
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+function normalizeProviders(providers) {
+    if (!Array.isArray(providers)) return [];
+
+    return providers.map((p, index) => ({
+        id: p.id || `provider-${index + 1}`,
+        name: p.name || p.id || `Provider ${index + 1}`,
+        base_url: p.base_url || '',
+        api_key: p.api_key || '',
+        models: Array.isArray(p.models) ? p.models.filter(Boolean) : [],
+        provider_type: p.provider_type || 'openai',
+    }));
+}
+
+function findProvider(providers, providerId) {
+    return providers.find(p => p.id === providerId) || providers[0] || null;
+}
+
+function resolveActiveProviderId(providers, configuredId) {
+    if (!providers.length) return '';
+    if (configuredId && providers.some(p => p.id === configuredId)) return configuredId;
+    return providers[0].id;
+}
+
+function resolveActiveModel(providers, providerId, configuredModel) {
+    const provider = findProvider(providers, providerId);
+    if (!provider || !provider.models?.length) return '';
+    if (configuredModel && provider.models.includes(configuredModel)) return configuredModel;
+    return provider.models[0];
 }
 
 
@@ -405,55 +496,86 @@ function generateId() {
 
 function renderProviderDropdown(type) {
     const providers = type === 'stt' ? sttProviders : llmProviders;
-    const activeId = type === 'stt' ? activeSttProviderId : activeLlmProviderId;
-    const activeModel = type === 'stt' ? activeSttModel : activeLlmModel;
 
     const providerSelect = document.getElementById(`${type}ActiveProvider`);
     const modelSelect = document.getElementById(`${type}ActiveModel`);
+    if (!providerSelect || !modelSelect) return;
 
-    providerSelect.innerHTML = providers.map(p =>
-        `<option value="${escapeHtml(p.id)}" ${p.id === activeId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
-    ).join('');
+    let activeId = type === 'stt' ? activeSttProviderId : activeLlmProviderId;
+    let activeModel = type === 'stt' ? activeSttModel : activeLlmModel;
+
+    activeId = resolveActiveProviderId(providers, activeId);
+    activeModel = resolveActiveModel(providers, activeId, activeModel);
 
     if (providers.length === 0) {
         providerSelect.innerHTML = '<option value="">No providers</option>';
         modelSelect.innerHTML = '<option value="">N/A</option>';
-        return;
+        activeId = '';
+        activeModel = '';
+    } else {
+        providerSelect.innerHTML = providers.map(p =>
+            `<option value="${escapeHtml(p.id)}" ${p.id === activeId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+        ).join('');
+        providerSelect.value = activeId;
+        updateModelDropdown(type, activeId, activeModel);
     }
 
-    updateModelDropdown(type, activeId, activeModel);
+    if (type === 'stt') {
+        activeSttProviderId = activeId;
+        activeSttModel = activeModel;
+    } else {
+        activeLlmProviderId = activeId;
+        activeLlmModel = activeModel;
+    }
+
+    if (providers.length === 0) {
+        return;
+    }
 }
 
 function updateModelDropdown(type, providerId, selectedModel) {
     const providers = type === 'stt' ? sttProviders : llmProviders;
     const provider = providers.find(p => p.id === providerId);
     const modelSelect = document.getElementById(`${type}ActiveModel`);
+    if (!modelSelect) return;
 
     if (!provider || !provider.models || provider.models.length === 0) {
         modelSelect.innerHTML = '<option value="">No models</option>';
+        if (type === 'stt') activeSttModel = '';
+        else activeLlmModel = '';
         return;
     }
 
+    const activeModel = provider.models.includes(selectedModel) ? selectedModel : provider.models[0];
     modelSelect.innerHTML = provider.models.map(m =>
-        `<option value="${escapeHtml(m)}" ${m === selectedModel ? 'selected' : ''}>${escapeHtml(m)}</option>`
+        `<option value="${escapeHtml(m)}" ${m === activeModel ? 'selected' : ''}>${escapeHtml(m)}</option>`
     ).join('');
+    modelSelect.value = activeModel;
+
+    if (type === 'stt') activeSttModel = activeModel;
+    else activeLlmModel = activeModel;
 }
 
 function onSttProviderChange() {
-    const id = document.getElementById('sttActiveProvider').value;
-    updateModelDropdown('stt', id, null);
+    const select = document.getElementById('sttActiveProvider');
+    if (!select) return;
+    const id = select.value;
     activeSttProviderId = id;
+    updateModelDropdown('stt', id, null);
 }
 
 function onLlmProviderChange() {
-    const id = document.getElementById('llmActiveProvider').value;
-    updateModelDropdown('llm', id, null);
+    const select = document.getElementById('llmActiveProvider');
+    if (!select) return;
+    const id = select.value;
     activeLlmProviderId = id;
+    updateModelDropdown('llm', id, null);
 }
 
 function renderProviderList(type) {
     const providers = type === 'stt' ? sttProviders : llmProviders;
     const list = document.getElementById(`${type}ProviderList`);
+    if (!list) return;
 
     if (providers.length === 0) {
         list.innerHTML = `<tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">No providers configured. Click "New Provider" to add one.</td></tr>`;
@@ -461,8 +583,8 @@ function renderProviderList(type) {
     }
 
     list.innerHTML = providers.map(p => {
-        const maskedKey = p.api_key ? '••••••••' : 'None';
-        const modelsHtml = p.models.map(m => `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">${escapeHtml(m)}</span>`).join(' ');
+        const models = Array.isArray(p.models) ? p.models : [];
+        const modelsHtml = models.map(m => `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">${escapeHtml(m)}</span>`).join(' ');
 
         return `
             <tr class="hover:bg-gray-50 transition-colors group">
@@ -502,6 +624,7 @@ function openProviderModal(type, providerId = null) {
     let provider = providerId ? providers.find(p => p.id === providerId) : null;
 
     document.getElementById('modalProviderId').value = providerId || '';
+    document.getElementById('modalProviderApiType').value = provider?.provider_type || 'openai';
     document.getElementById('modalProviderName').value = provider ? provider.name : '';
     document.getElementById('modalProviderUrl').value = provider ? provider.base_url : '';
     document.getElementById('modalProviderKey').value = provider ? provider.api_key : '';
@@ -511,7 +634,7 @@ function openProviderModal(type, providerId = null) {
     keyInput.type = 'password';
     icon.textContent = 'visibility';
 
-    modalModels = provider ? [...provider.models] : [];
+    modalModels = provider && Array.isArray(provider.models) ? [...provider.models] : [];
     renderModalModels();
 
     const modal = document.getElementById('providerModal');
@@ -573,6 +696,7 @@ function removeModalModel(index) {
 async function saveProviderModal() {
     const type = document.getElementById('modalProviderType').value;
     const id = document.getElementById('modalProviderId').value || generateId();
+    const providerType = document.getElementById('modalProviderApiType').value || 'openai';
     const name = document.getElementById('modalProviderName').value.trim();
     const url = document.getElementById('modalProviderUrl').value.trim();
     const key = document.getElementById('modalProviderKey').value.trim();
@@ -587,7 +711,8 @@ async function saveProviderModal() {
         name: name,
         base_url: url,
         api_key: key,
-        models: [...modalModels]
+        models: [...modalModels],
+        provider_type: providerType,
     };
 
     const providers = type === 'stt' ? sttProviders : llmProviders;
