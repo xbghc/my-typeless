@@ -224,27 +224,3 @@ class AppConfig:
 
         config.save()
         return config
-
-        try:
-            data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            stt = STTConfig(**data.get("stt", {}))
-            llm = LLMConfig(**data.get("llm", {}))
-            glossary = data.get("glossary", [])
-            if not isinstance(glossary, list):
-                glossary = []
-            config = cls(
-                hotkey=data.get("hotkey", "right alt"),
-                start_with_windows=data.get("start_with_windows", False),
-                stt=stt,
-                llm=llm,
-                glossary=glossary,
-            )
-        except (json.JSONDecodeError, TypeError, KeyError):
-            config = cls()
-
-        # 开发模式下强制使用代码中的最新提示词
-        if DEV_MODE:
-            config.llm.prompt = DEFAULT_LLM_PROMPT
-
-        config.save()
-        return config

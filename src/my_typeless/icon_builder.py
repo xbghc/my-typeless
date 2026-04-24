@@ -22,20 +22,12 @@ def ensure_app_ico() -> Path | None:
         import resvg_py
         from PIL import Image
     except ImportError:
-        logger.info(
-            "resvg_py/Pillow 不可用，跳过 ICO 自动生成（可运行 scripts/build.py）"
-        )
+        logger.info("resvg_py/Pillow 不可用，跳过 ICO 自动生成（可运行 scripts/build.py）")
         return None
     try:
         imgs = [
             Image.open(
-                io.BytesIO(
-                    bytes(
-                        resvg_py.svg_to_bytes(
-                            svg_path=str(SVG_PATH), width=s, height=s
-                        )
-                    )
-                )
+                io.BytesIO(bytes(resvg_py.svg_to_bytes(svg_path=str(SVG_PATH), width=s, height=s)))
             ).convert("RGBA")
             for s in SIZES
         ]

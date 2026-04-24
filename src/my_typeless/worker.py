@@ -197,7 +197,7 @@ class Worker:
                     True,
                 )
             elif isinstance(e, openai.BadRequestError):
-                self.events.emit("error_occurred", f"API 请求参数错误：{e.message}", True)
+                self.events.emit("error_occurred", f"API 请求参数错误：{e}", True)
             elif isinstance(e, openai.APITimeoutError):
                 self.events.emit(
                     "error_occurred", "API 请求超时，请检查网络连接或稍后重试。", False
@@ -207,9 +207,9 @@ class Worker:
                     "error_occurred", "API 请求过于频繁，请稍后再试或检查额度是否充足。", False
                 )
             elif isinstance(e, openai.APIStatusError):
-                self.events.emit(
-                    "error_occurred", f"API 服务异常 (HTTP {e.status_code})，请稍后重试。", False
-                )
+                status_code = e.__dict__.get("status_code")
+                status = f"HTTP {status_code}" if status_code is not None else "HTTP 状态未知"
+                self.events.emit("error_occurred", f"API 服务异常 ({status})，请稍后重试。", False)
             else:
                 self.events.emit("error_occurred", f"发生未知错误：{e}", False)
 

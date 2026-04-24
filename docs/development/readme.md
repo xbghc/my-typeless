@@ -20,9 +20,13 @@ python scripts/build.py --version 1.0.0
 
 # 仅注入版本不构建
 python scripts/build.py --version 1.0.0 --no-build
+
+# 静态检查
+uv run ruff check src
+uv run pyright
 ```
 
-无测试套件、无 linter 配置。
+暂无测试套件；静态检查使用 Ruff 和 Pyright，配置见 `pyproject.toml`。
 
 ## 数据流
 
@@ -61,7 +65,7 @@ python scripts/build.py --version 1.0.0 --no-build
 ## 配置与数据
 
 - 配置文件：`~/.my-typeless/config.json`（dataclass 定义在 `config.py`）
-- 历史记录：`~/.my-typeless/history.sqlite`（最近 200 条）
+- 历史记录：`~/.my-typeless/history.db`（最近 200 条）
 - 日志文件：`~/.my-typeless/app.log`
 
 ### 环境变量

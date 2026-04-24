@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 HISTORY_DIR = Path.home() / ".my-typeless"
 HISTORY_DB = HISTORY_DIR / "history.db"
 _LEGACY_FILE = HISTORY_DIR / "history.json"
+MAX_HISTORY_ENTRIES = 200
 
 _conn: sqlite3.Connection | None = None
 
@@ -72,6 +73,19 @@ def _get_conn() -> sqlite3.Connection:
     return _conn
 
 
+def _prune_history(conn: sqlite3.Connection) -> None:
+    """保留最近的历史记录，删除超出上限的旧记录。"""
+    conn.execute(
+        """
+        DELETE FROM history
+        WHERE id NOT IN (
+            SELECT id FROM history ORDER BY id DESC LIMIT ?
+        )
+        """,
+        (MAX_HISTORY_ENTRIES,),
+    )
+
+
 def _maybe_migrate() -> None:
     if not _LEGACY_FILE.exists():
         return
@@ -96,6 +110,7 @@ def _maybe_migrate() -> None:
                 for e in data
             ],
         )
+        _prune_history(conn)
         conn.commit()
         _LEGACY_FILE.unlink(missing_ok=True)
         logger.info("Migrated %d history entries from JSON to SQLite", len(data))
@@ -134,6 +149,7 @@ def add_history(
             entry.llm_done_at,
         ),
     )
+    _prune_history(conn)
     conn.commit()
 
 

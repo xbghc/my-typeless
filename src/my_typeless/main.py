@@ -30,7 +30,7 @@ def _resolve_web_dir() -> Path:
     # In one-file PyInstaller builds, the entry script may live directly under
     # sys._MEIPASS while package data is unpacked under sys._MEIPASS/my_typeless.
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        bundle_dir = Path(getattr(sys, "_MEIPASS"))
+        bundle_dir = Path(sys.__dict__["_MEIPASS"])
         candidates.insert(0, bundle_dir / "my_typeless" / "web")
         candidates.append(bundle_dir / "web")
 
@@ -118,7 +118,7 @@ class MyTypelessApp:
             "My Typeless 更新",
             f"发现新版本: {release.name} (v{release.version})\n"
             f"文件大小: {size_mb:.1f} MB\n"
-            f"请打开设置进行更新。",
+            f"正在后台下载，完成后将自动安装并退出当前实例。",
         )
         # 自动开始下载
         self._updater.download(release)
