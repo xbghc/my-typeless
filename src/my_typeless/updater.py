@@ -190,6 +190,9 @@ class UpdateChecker:
         self.events = EventEmitter()
         self._timer: threading.Timer | None = None
         self._running = False
+        self._lock = threading.Lock()
+        self._check_thread: threading.Thread | None = None
+        self._download_thread: threading.Thread | None = None
 
     def start(self, immediate: bool = True):
         """启动定时检查"""
@@ -220,26 +223,49 @@ class UpdateChecker:
 
     def check_now(self):
         """在后台线程立即检查一次"""
-        threading.Thread(target=self._do_check, daemon=True).start()
+        thread: threading.Thread | None = None
+        with self._lock:
+            if self._check_thread and self._check_thread.is_alive():
+                logger.debug("Update check already running, skip duplicate trigger")
+                return
+            thread = threading.Thread(target=self._do_check, daemon=True)
+            self._check_thread = thread
+        thread.start()
 
     def download(self, release: ReleaseInfo):
         """在后台线程开始下载新版本"""
-        threading.Thread(target=self._do_download, args=(release,), daemon=True).start()
+        thread: threading.Thread | None = None
+        with self._lock:
+            if self._download_thread and self._download_thread.is_alive():
+                logger.debug("Update download already running, skip duplicate trigger")
+                return
+            thread = threading.Thread(target=self._do_download, args=(release,), daemon=True)
+            self._download_thread = thread
+        thread.start()
 
     def _do_check(self):
-        if DEV_MODE:
-            logger.debug("Skip update check in dev mode (MY_TYPELESS_DEV=1)")
-            return
-        release = fetch_latest_release()
-        if release and is_newer(release.version):
-            self.events.emit("update_available", release)
+        try:
+            if DEV_MODE:
+                logger.debug("Skip update check in dev mode (MY_TYPELESS_DEV=1)")
+                return
+            release = fetch_latest_release()
+            if release and is_newer(release.version):
+                self.events.emit("update_available", release)
+        finally:
+            with self._lock:
+                self._check_thread = None
 
     def _do_download(self, release: ReleaseInfo):
-        tmp_dir = Path(tempfile.mkdtemp())
-        tmp = tmp_dir / (release.asset_name or "MyTypeless-Setup.exe")
-        ok = download_release(release, tmp)
-        if ok:
-            self.events.emit("update_downloaded", str(tmp))
-        else:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            self.events.emit("update_error", "下载更新失败，请稍后重试")
+        try:
+            tmp_dir = Path(tempfile.mkdtemp())
+            tmp = tmp_dir / (release.asset_name or "MyTypeless-Setup.exe")
+            ok = download_release(release, tmp)
+            if ok:
+                # 成功后保留安装包，交由后续安装流程使用并负责清理。
+                self.events.emit("update_downloaded", str(tmp))
+            else:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                self.events.emit("update_error", "下载更新失败，请稍后重试")
+        finally:
+            with self._lock:
+                self._download_thread = None
