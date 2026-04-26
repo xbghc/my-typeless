@@ -197,7 +197,9 @@ class Worker:
                     continue
 
                 transcription_parts.append(text)
-                transcription_tail = _update_transcription_tail(transcription_tail, text, tail_budget)
+                transcription_tail = _update_transcription_tail(
+                    transcription_tail, text, tail_budget
+                )
 
                 # LLM 精修：将已精修的前文作为上下文
                 logger.debug("Refining segment...")
