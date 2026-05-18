@@ -1,4 +1,7 @@
+import pytest
+
 from my_typeless import updater
+from my_typeless.updater import _parse_version, is_newer
 
 
 class _FakeThread:
@@ -142,3 +145,51 @@ def test_do_download_success_emits_path_and_keeps_file_for_installer(monkeypatch
     saved = tmp_dir / "MyTypeless-Setup-v1.0.0.exe"
     assert emitted_paths[0] == str(saved)
     assert saved.exists() is True
+
+
+# ── 版本号解析与比较 ──────────────────────────────────────────────────────
+# updater 是否能正确判断"已是最新版"——一旦解析错误会导致用户永远收不到更新。
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("1.2.3", (1, 2, 3)),
+        ("v1.2.3", (1, 2, 3)),
+        ("V1.2.3", (1, 2, 3)),
+        ("1.2.3-rc1", (1, 2, 3)),
+        ("v1.0.5-rc2", (1, 0, 5)),
+        ("1.2", (1, 2)),
+        ("1", (1,)),
+        ("1.2.3.4", (1, 2, 3, 4)),
+        ("v0.0.0.dev0", (0, 0, 0)),
+        ("", ()),
+        ("vinvalid", ()),
+    ],
+)
+def test_parse_version(raw, expected):
+    assert _parse_version(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "remote,local,expected",
+    [
+        ("v1.2.3", "v1.2.2", True),
+        ("v1.2.3", "v1.2.3", False),
+        ("v1.2.3", "v1.2.4", False),
+        ("v1.2.0", "v1.1.99", True),
+        ("v2.0.0", "v1.99.99", True),
+        ("v1.2.3", "v1.2.3-rc1", False),
+        ("v1.2.3-rc2", "v1.2.3-rc1", False),
+        ("v1.2.3", "0.0.0.dev0", True),
+        ("v1.0.0", "v1.0", True),
+    ],
+)
+def test_is_newer(remote, local, expected):
+    assert is_newer(remote, local) is expected
+
+
+def test_is_newer_uses_local_version_default():
+    """不传 local 参数时回落到模块加载时的 __version__（默认参数在函数定义时绑定）。"""
+    assert is_newer("") is False
+    assert is_newer("v999.0.0") is True

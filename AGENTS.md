@@ -29,17 +29,29 @@ uv run pyright
 uv run pytest
 ```
 
-测试框架使用 pytest；静态检查使用 Ruff 和 Pyright，配置见 `pyproject.toml`。
+测试位于 `tests/`，覆盖 `worker` 流水线（依赖注入 + mock STT/LLM/inject/history/candidates）、
+`config` 默认值与旧版迁移、`updater` 线程生命周期与版本比较、`recorder` WAV 编码、
+`vad` Silero ONNX 加载、`candidates` 自动缩写提取、`history` SQLite 读写与迁移。
+依赖 Windows-only 模块（pyaudio、pywin32），CI 在 windows-latest 上运行。
 
 ## Architecture
 
 ### 数据流
 
 ```
-按住热键 → 录音(16kHz/mono) → 静音分段(600ms) → STT转录(OpenAI API) → LLM润色 → 剪贴板注入(Ctrl+V)
+按住热键 → 录音(16kHz/mono) → Silero VAD 分段(600ms 停顿)
+        → STT 转录(OpenAI 兼容 API)
+        → zhconv 繁→简 后处理
+        → 拼接 → 整段 LLM 精修(含术语表)
+        → 剪贴板注入(Ctrl+V)
+        → 写历史 + 提取英文缩写到 glossary 候选
 ```
 
-音频分段在录音过程中增量处理（边录边转），而非等待录音结束后批量处理。
+STT 在录音过程中分段进行（边录边转），松开热键后对完整转录做一次 LLM 精修——
+分段 STT 降低端到端延迟，整段 LLM 让模型看到全文以做跨段去重、统一列表序号等全局整理。
+Silero VAD（`vad.py`，ONNX 模型 `silero_vad.onnx` 约 2.3 MB）替代 RMS 静音检测，
+在中文气口、背景噪声场景下更稳定。glossary 候选（`candidates.py`）从精修结果中
+提取英文缩写，反复出现时通过设置界面提示加入术语表。
 
 ### 线程模型
 

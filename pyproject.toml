@@ -12,6 +12,9 @@ dependencies = [
     "pystray>=0.19",
     "pywebview>=5.0",
     "pywin32>=311",
+    "zhconv>=1.4.3",
+    "onnxruntime>=1.16",
+    "numpy>=1.26",
 ]
 
 [project.gui-scripts]
@@ -22,6 +25,7 @@ dev = [
     "pyinstaller>=6.0",
     "resvg_py>=0.3",
     "pytest>=8.3",
+    "pytest-mock>=3.12",
     "ruff>=0.6",
     "pyright>=1.1.380",
 ]
@@ -62,3 +66,5 @@ reportUnnecessaryTypeIgnoreComment = "warning"  # 防止 type:ignore 堆积
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra --strict-markers"

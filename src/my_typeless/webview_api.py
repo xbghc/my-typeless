@@ -7,6 +7,11 @@ from dataclasses import asdict
 import keyboard
 from openai import OpenAI
 
+from my_typeless.candidates import (
+    accept_candidate,
+    dismiss_candidate,
+    get_candidates,
+)
 from my_typeless.config import AppConfig
 from my_typeless.history import add_history, clear_history, get_history_page
 from my_typeless.llm_client import LLMClient
@@ -237,3 +242,27 @@ class SettingsAPI:
         """隐藏设置窗口（窗口保持存活供下次打开）"""
         if self._window:
             self._window.hide()
+
+    # ── Glossary 候选机制 ──────────────────────────────────────────────────
+    def get_glossary_candidates(self, min_count: int = 3) -> list[dict]:
+        """返回累计出现 ≥ min_count 次、未被忽略的候选词，按频率降序。"""
+        return [asdict(c) for c in get_candidates(min_count=min_count)]
+
+    def accept_glossary_candidate(self, term: str) -> dict:
+        """接受候选：加进 glossary 并保存配置，候选表中移除。"""
+        if not term:
+            return {"success": False, "error": "term is empty"}
+        if term not in self._config.glossary:
+            self._config.glossary = [*self._config.glossary, term]
+            self._config.save()
+            if self._on_save:
+                self._on_save(self._config)
+        accept_candidate(term)
+        return {"success": True}
+
+    def dismiss_glossary_candidate(self, term: str) -> dict:
+        """拒绝候选：标记 ignored，默认查询不再返回。"""
+        if not term:
+            return {"success": False, "error": "term is empty"}
+        dismiss_candidate(term)
+        return {"success": True}

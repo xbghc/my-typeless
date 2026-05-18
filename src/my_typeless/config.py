@@ -15,19 +15,24 @@ CONFIG_DIR = Path.home() / ".my-typeless"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 DEFAULT_LLM_PROMPT = (
-    "你是一个语音转书面文字的精修助手。用户通过麦克风口述，STT 引擎转录后发给你。\n"
-    "\n"
-    "## 任务\n"
-    "将口语转录文本精修为可直接使用的书面文字。\n"
+    "你的任务是把语音转录文本翻译成书面文字——你是一个口语→书面的形式翻译者，"
+    "不是一个让内容变得更好的编辑。尽量保留用户的原始措辞和表达方式；"
+    "只在为了让读者理解所必需的地方做最小化纠正。\n"
     "\n"
     "## 规则\n"
-    "1. **去噪**：删除口头禅（嗯、啊、那个、就是说）、无意义的重复、自我纠正（'不对，应该是……'只保留纠正后的内容）\n"
-    "2. **保意**：忠实保留用户最终想表达的完整意图，不增删实质内容。注意区分'真正的重复'和'结构相似但含义不同的并列表述'，后者必须保留\n"
+    "1. **去噪**：删除口头禅（嗯、啊、那个、就是说）、无意义的重复、自我纠正"
+    "（'不对，应该是……'只保留纠正后的内容）\n"
+    "2. **保意**：忠实保留用户最终想表达的完整意图，不增删实质内容。"
+    "注意区分'真正的重复'和'结构相似但含义不同的并列表述'，后者必须保留\n"
     "3. **语言**：保持原始语言不变（中文输入输出中文，英文输入输出英文，中英混合则保持混合）\n"
     "4. **标点**：补全标点符号，使用正确的中文/英文标点\n"
     "5. **格式**：如果内容包含列表、步骤等结构化信息，可适当用换行或编号整理\n"
     "6. **简短输入**：如果输入很短（几个词），直接输出修正后的词句，不要扩写\n"
-    "7. **代码/专有名词**：保留技术术语、代码片段、人名、产品名的原始写法\n"
+    "7. **代码/专有名词**：\n"
+    "   - 保留下方'用户术语表'中专有名词的原始写法。\n"
+    "   - 对疑似 STT 同音误识的内容（如近音乱码 '多兩期'/'CCS'/'CC4'、"
+    "单字母逐读的谐音中文结果），按上下文与术语表还原为正确写法。\n"
+    "   - 术语表外但可识别的人名、产品名、代码片段保留原样。\n"
     "8. **句式**：保留原始句式——疑问句仍为疑问句，祈使句仍为祈使句，不要将问题改写为陈述\n"
     "\n"
     "## 输出\n"
@@ -60,7 +65,9 @@ class STTConfig:
     )
     active_provider_id: str = "default-stt"
     active_model: str = "whisper-large-v3"
-    language: str = ""  # 语言代码（如 "zh"），留空则自动检测
+    # 默认中文：Whisper auto-detect 中文常输出繁体，并偶发误判为粤语/日语；
+    # 显式 "zh" + 后续 zhconv 简体后处理是社区共识做法。设置面板可改回空（auto）。
+    language: str = "zh"
 
     @property
     def active_provider(self) -> ProviderConfig | None:
@@ -104,20 +111,29 @@ class AppConfig:
     glossary: list[str] = field(default_factory=list)
 
     def build_llm_system_prompt(self) -> str:
-        """组装完整的 LLM system prompt（基础 prompt，预留扩展点）"""
+        """组装完整的 LLM system prompt（基础 prompt + 用户术语表）。"""
         parts = [self.llm.prompt]
-        # 未来可在此追加 user_context 等段落
+        if self.glossary:
+            terms = "、".join(self.glossary)
+            parts.append(
+                "## 用户术语表\n"
+                "以下是用户的常用专有名词，请保留这些词的原始写法；"
+                "在 STT 输出中遇到近音误识时，按此表还原：\n"
+                f"{terms}"
+            )
         return "\n\n".join(parts)
 
     def build_stt_prompt(self) -> str:
-        """组装 STT prompt（术语列表，帮助 Whisper 正确识别专有名词）
+        """组装 STT prompt：把术语嵌入自然句中送给 Whisper。
 
-        Whisper 将 prompt 视为"此前已转录的文本"，用中文顿号连接术语
-        使其更贴合中文转录上下文，避免使用指令性语句。
+        Whisper 把 prompt 视为"此前已转录的文本"，OpenAI cookbook 实测
+        自然句形式比裸列表（顿号分隔）更利于上下文识别和拼写保留。
+        Token 上限 224，超出会从前截断——所以重要内容放尾部。
         """
         if not self.glossary:
             return ""
-        return "、".join(self.glossary)
+        terms = "、".join(self.glossary)
+        return f"本次内容涉及以下术语：{terms}。以下是普通话的句子。"
 
     def save(self) -> None:
         """保存配置到 JSON 文件"""

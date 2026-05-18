@@ -1,4 +1,4 @@
-"""后台处理 - 录音 → 增量 STT → LLM → 文本注入"""
+"""后台处理 - 录音 → 分段 STT → 整段 LLM → 文本注入"""
 
 import logging
 import queue
@@ -7,6 +7,9 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+import zhconv
+
+from my_typeless.candidates import record_from_refined
 from my_typeless.config import AppConfig
 from my_typeless.events import EventEmitter
 from my_typeless.history import add_history
@@ -82,8 +85,9 @@ class Worker:
     """
     后台工作控制器，负责处理完整的语音→文本流水线
 
-    录音过程中检测停顿，将已有的音频片段立即提交转录，
-    从而在用户松开按键时大部分音频已完成转录，显著降低延迟。
+    录音过程中分段 STT（边录边转），松开热键后对完整转录做一次 LLM 精修——
+    分段 STT 降低端到端延迟，整段 LLM 让模型看到全文以做跨段去重、统一列表序号、
+    补救段尾悬挂连接词等全局整理。
 
     Events:
         state_changed(str): 状态变化 ("idle" / "recording" / "processing")
@@ -101,6 +105,7 @@ class Worker:
         llm_client_factory: Callable[..., Any] = LLMClient,
         text_injector: Callable[[str], None] = inject_text,
         history_adder: Callable[..., None] = add_history,
+        candidates_recorder: Callable[[str, Any], None] = record_from_refined,
     ):
         self.events = EventEmitter()
         self._config = config
@@ -109,6 +114,7 @@ class Worker:
         self._llm_client_factory = llm_client_factory
         self._text_injector = text_injector
         self._history_adder = history_adder
+        self._candidates_recorder = candidates_recorder
         self._key_press_at: str = ""
         self._segment_queue: queue.Queue = queue.Queue()
 
@@ -158,7 +164,7 @@ class Worker:
         self._segment_queue.put(wav_data)
 
     def _incremental_process(self, key_press_at: str, segment_queue: queue.Queue) -> None:
-        """增量处理消费线程：逐段 STT → LLM 精修 → 拼接 → 注入文本"""
+        """消费线程：录音中逐段 STT（边录边转），松键后对全文做一次 LLM 精修，再注入文本。"""
         try:
             stt = self._stt_client_factory(self._config.stt)
             llm = self._llm_client_factory(self._config.llm)
@@ -167,14 +173,14 @@ class Worker:
 
             transcription_parts: list[str] = []
             transcription_tail = ""
-            accumulated_refined = ""
+            key_release_at = ""
             tail_budget = (
                 _MAX_PROMPT_CHARS - len(base_stt_prompt) - 1
                 if base_stt_prompt
                 else _MAX_PROMPT_CHARS
             )
 
-            # 持续从队列中取出音频片段，逐段完成 STT + LLM
+            # 录音期间逐段 STT（边录边转），不做 LLM 精修
             while True:
                 try:
                     item = segment_queue.get(timeout=0.1)
@@ -191,6 +197,9 @@ class Worker:
 
                 logger.debug("Transcribing segment (%d bytes)...", len(item))
                 text = stt.transcribe(item, prompt=stt_prompt)
+                # 简繁后处理：Whisper 在 language="zh" 时仍常输出繁体，统一转简体
+                # （zhconv 对非中文字符是 no-op，对纯英文段无副作用）
+                text = zhconv.convert(text, "zh-cn")
                 logger.debug("Segment STT result: %r", text)
 
                 if not text or not text.strip():
@@ -201,43 +210,40 @@ class Worker:
                     transcription_tail, text, tail_budget
                 )
 
-                # LLM 精修：将已精修的前文作为上下文
-                logger.debug("Refining segment...")
-                refined = llm.refine(
-                    text,
-                    system_prompt=llm_system_prompt,
-                    context=accumulated_refined,
-                )
-                logger.debug("Segment LLM result: %r", refined)
-                accumulated_refined += refined
-
-            done_at = datetime.now().strftime(self._TIME_FMT)
-
-            # 拼接全部结果
+            stt_done_at = datetime.now().strftime(self._TIME_FMT)
             raw_text = "".join(transcription_parts)
-            refined_text = accumulated_refined
             logger.debug("Full STT result: %r", raw_text)
-            logger.debug("Full LLM result: %r", refined_text)
 
             if not raw_text.strip():
                 logger.debug("Empty STT result, skipping")
                 self.events.emit("state_changed", "idle")
                 return
 
+            # 全文一次性精修：让 LLM 看到全段，可跨段去重、统一列表序号、补救段尾悬挂连接词
+            logger.debug("Refining full transcription...")
+            refined_text = llm.refine(raw_text, system_prompt=llm_system_prompt)
+            llm_done_at = datetime.now().strftime(self._TIME_FMT)
+            logger.debug("Full LLM result: %r", refined_text)
+
             # 注入文本
             logger.debug("Injecting text...")
             self._text_injector(refined_text)
             logger.debug("Text injected successfully")
 
-            # 记录历史（增量模式下 STT 和 LLM 交替进行，完成时间相同）
             self._history_adder(
                 raw_text,
                 refined_text,
                 key_press_at=key_press_at,
                 key_release_at=key_release_at,
-                stt_done_at=done_at,
-                llm_done_at=done_at,
+                stt_done_at=stt_done_at,
+                llm_done_at=llm_done_at,
             )
+
+            # 从精修结果提取英文缩写到候选 glossary；失败不应中断主流程
+            try:
+                self._candidates_recorder(refined_text, self._config.glossary)
+            except Exception:
+                logger.exception("Failed to record glossary candidates")
 
             self.events.emit("result_ready", refined_text)
 

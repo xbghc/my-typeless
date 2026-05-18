@@ -24,6 +24,8 @@ a = Analysis(
         (str(RESOURCES / "*.svg"), "my_typeless/resources"),
         (str(RESOURCES / "*.png"), "my_typeless/resources"),
         (str(SRC / "web" / "*"), "my_typeless/web"),
+        # Silero VAD 模型文件（vad.py 通过 sys._MEIPASS 解析路径）
+        (str(SRC / "silero_vad.onnx"), "my_typeless"),
     ],
     hiddenimports=[
         "my_typeless",
@@ -35,6 +37,7 @@ a = Analysis(
         "my_typeless.stt_client",
         "my_typeless.text_injector",
         "my_typeless.tray",
+        "my_typeless.vad",
         "my_typeless.worker",
         "my_typeless.version",
         "my_typeless._version",  # 由 scripts/build.py 在打包前生成；version.py 通过 try-import 引用
@@ -59,7 +62,7 @@ a = Analysis(
     excludes=[
         "tkinter",
         "matplotlib",
-        "numpy",
+        # numpy 由 onnxruntime（Silero VAD）依赖，不能排除
         "pandas",
         "scipy",
         "pytest",

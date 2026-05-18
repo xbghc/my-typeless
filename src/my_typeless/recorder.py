@@ -1,36 +1,39 @@
-"""麦克风录音模块 - 使用 pyaudio 录制音频，支持停顿检测与分段回调"""
+"""麦克风录音模块 - 使用 pyaudio 录制音频，Silero VAD 做停顿检测与分段回调。"""
 
 import io
-import math
-import struct
 import threading
 import wave
 from collections.abc import Callable
 
 import pyaudio
 
-# Whisper 推荐参数
+from my_typeless.vad import SPEECH_THRESHOLD, VAD_CHUNK_SAMPLES, SileroVAD
+
+# Whisper 推荐参数；Silero VAD 在 16 kHz 上每帧必须正好 VAD_CHUNK_SAMPLES (512)。
 SAMPLE_RATE = 16000
 CHANNELS = 1
 SAMPLE_WIDTH = 2  # 16-bit
-CHUNK_SIZE = 1024
+CHUNK_SIZE = VAD_CHUNK_SAMPLES
 FORMAT = pyaudio.paInt16
 
-# 停顿检测参数
-SILENCE_THRESHOLD = 500  # RMS 阈值，低于此值视为静音
+# 停顿检测参数（基于 chunk 数）。CHUNK_SIZE=512 → 每秒 ≈31.25 帧。
 SILENCE_DURATION = 0.6  # 静音持续秒数，超过则认为是停顿
 MIN_SPEECH_DURATION = 0.5  # 最短语音片段时长（秒），过短的片段不发送
 
 
 class Recorder:
-    """麦克风录音器，在独立线程中运行，支持停顿检测与分段回调"""
+    """麦克风录音器，在独立线程中运行；用 Silero VAD 检测停顿并分段回调。"""
 
-    def __init__(self):
+    def __init__(self, vad_factory: Callable[[], SileroVAD] | None = None):
+        """vad_factory 仅用于测试注入，正常情况下不传，按需 lazy 初始化。"""
         self._audio = pyaudio.PyAudio()
         self._stream: pyaudio.Stream | None = None
         self._frames: list[bytes] = []
         self._recording = False
         self._thread: threading.Thread | None = None
+
+        self._vad_factory = vad_factory or SileroVAD
+        self._vad: SileroVAD | None = None
 
         # 增量转录相关
         self._on_segment: Callable[[bytes], None] | None = None
@@ -52,6 +55,13 @@ class Recorder:
         self._in_speech = False
         self._silence_chunks = 0
         self._on_segment = on_segment
+
+        # Lazy 初始化 VAD：首次录音时才加载 onnx 模型，避免增加冷启动时间
+        if on_segment is not None:
+            if self._vad is None:
+                self._vad = self._vad_factory()
+            self._vad.reset()
+
         self._recording = True
         self._thread = threading.Thread(target=self._record_loop, daemon=True)
         self._thread.start()
@@ -81,7 +91,7 @@ class Recorder:
             return self._build_wav(self._frames)
 
     def _record_loop(self) -> None:
-        """录音主循环，包含可选的停顿检测逻辑"""
+        """录音主循环；增量模式下用 Silero VAD 做停顿检测。"""
         silence_chunks_needed = int(SILENCE_DURATION * SAMPLE_RATE / CHUNK_SIZE)
         min_speech_chunks = int(MIN_SPEECH_DURATION * SAMPLE_RATE / CHUNK_SIZE)
 
@@ -97,14 +107,14 @@ class Recorder:
                 data = self._stream.read(CHUNK_SIZE, exception_on_overflow=False)
                 self._frames.append(data)
 
-                if self._on_segment is None:
+                if self._on_segment is None or self._vad is None:
                     continue
 
-                # --- 增量模式：停顿检测 ---
+                # --- 增量模式：Silero VAD 停顿检测 ---
                 self._segment_frames.append(data)
-                rms = self._calculate_rms(data)
+                speech_prob = self._vad(data)
 
-                if rms >= SILENCE_THRESHOLD:
+                if speech_prob >= SPEECH_THRESHOLD:
                     # 语音活动
                     self._in_speech = True
                     self._silence_chunks = 0
@@ -129,16 +139,6 @@ class Recorder:
                 self._stream.stop_stream()
                 self._stream.close()
                 self._stream = None
-
-    @staticmethod
-    def _calculate_rms(data: bytes) -> float:
-        """计算一帧音频数据的 RMS（均方根）能量值"""
-        count = len(data) // SAMPLE_WIDTH
-        if count == 0:
-            return 0.0
-        samples = struct.unpack(f"<{count}h", data)
-        sum_sq = sum(s * s for s in samples)
-        return math.sqrt(sum_sq / count)
 
     @staticmethod
     def _build_wav(frames: list[bytes]) -> bytes:

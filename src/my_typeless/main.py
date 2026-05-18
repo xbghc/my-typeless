@@ -1,6 +1,7 @@
 """My Typeless - AI 智能语音输入法入口"""
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -190,17 +191,31 @@ def _set_app_user_model_id():
             logger.warning(f"Failed to set AppUserModelID: {e}")
 
 
+class _FsyncFileHandler(logging.FileHandler):
+    """每条日志写入后 fsync，使 NTFS mtime 实时反映最近写入时间。
+
+    Windows 在文件句柄长期打开时不会刷新 LastWriteTime（lazy writing），
+    导致从外部观察会误以为日志停止写入。fsync 强制元数据落盘可避免这一误判。
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        super().emit(record)
+        if self.stream is not None:
+            try:
+                os.fsync(self.stream.fileno())
+            except (OSError, ValueError):
+                pass
+
+
 def main():
     _set_app_user_model_id()
 
     from my_typeless.config import CONFIG_DIR
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-        filename=str(CONFIG_DIR / "app.log"),
-    )
+    handler = _FsyncFileHandler(str(CONFIG_DIR / "app.log"), encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s"))
+    logging.basicConfig(level=logging.DEBUG, handlers=[handler])
     app = MyTypelessApp()
     sys.exit(app.run())
 
