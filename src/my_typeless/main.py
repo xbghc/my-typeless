@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 
 import webview
@@ -207,15 +208,64 @@ class _FsyncFileHandler(logging.FileHandler):
                 pass
 
 
+# httpcore / httpx / openai 的 DEBUG 输出会把控制台刷屏（每次 API 调用几十行）。
+# 文件日志保留它们便于排查网络问题；控制台只屏蔽到 WARNING 以上。
+_CONSOLE_NOISY_PREFIXES = ("httpx", "httpcore", "urllib3", "openai._base_client")
+
+
+class _DropNoisyForConsole(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (
+            record.name.startswith(_CONSOLE_NOISY_PREFIXES) and record.levelno < logging.WARNING
+        )
+
+
+def _install_threading_excepthook() -> None:
+    """抑制 pywebview 5.x 已知的 "Main window failed to start" race 异常。
+
+    JS 端 pywebviewready 事件触发后立即调 Python API 时，pywebview 内部
+    window._initialized 可能尚未 set，evaluate_js 回调线程抛此异常。
+    不影响主功能（API 调用本身已成功），但 traceback 会刷控制台。
+    这里把它降级为 DEBUG 日志，其它异常仍走默认处理。
+    """
+    original = threading.excepthook
+
+    def _hook(args: threading.ExceptHookArgs) -> None:
+        exc = args.exc_value
+        if (
+            exc is not None
+            and type(exc).__name__ == "WebViewException"
+            and "Main window failed to start" in str(exc)
+        ):
+            logger.debug("Suppressed pywebview init race: %s", exc)
+            return
+        original(args)
+
+    threading.excepthook = _hook
+
+
 def main():
     _set_app_user_model_id()
+    _install_threading_excepthook()
 
     from my_typeless.config import CONFIG_DIR
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    handler = _FsyncFileHandler(str(CONFIG_DIR / "app.log"), encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s"))
-    logging.basicConfig(level=logging.DEBUG, handlers=[handler])
+    fmt = logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+
+    file_handler = _FsyncFileHandler(str(CONFIG_DIR / "app.log"), encoding="utf-8")
+    file_handler.setFormatter(fmt)
+    handlers: list[logging.Handler] = [file_handler]
+
+    # 有控制台时（python -m my_typeless / 终端运行的 dev 启动）同时输出到 stderr。
+    # PyInstaller GUI 模式（console=False）下 sys.stderr 为 None，跳过 console handler。
+    if sys.stderr is not None:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(fmt)
+        console_handler.addFilter(_DropNoisyForConsole())
+        handlers.append(console_handler)
+
+    logging.basicConfig(level=logging.DEBUG, handlers=handlers)
     app = MyTypelessApp()
     sys.exit(app.run())
 
