@@ -1,25 +1,19 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
+# Dependencies
+node_modules/
+
+# 本地 npm 镜像配置（npmmirror，仅本地加速，不入库）
+.npmrc
+
+# Build output
+out/
 dist/
-wheels/
-*.egg-info
+release/
 
-# PyInstaller
-*.spec.bak
-file_version_info.txt
-*.old
+# Logs
+*.log
 
-# Build-time injected version (CI generates this; source tree stays at 0.0.0.dev0)
-src/my_typeless/_version.py
-
-# Generated icons (built from SVG by scripts/build.py)
-src/my_typeless/resources/*.ico
-src/my_typeless/resources/*.png
-
-# Virtual environments
-.venv
+# onnxruntime-web wasm 本地副本（构建期从 node_modules 复制）
+resources/ort-wasm/
 
 # IDE / Editor
 .vscode/
@@ -31,9 +25,6 @@ src/my_typeless/resources/*.png
 
 # Stitch UI design assets
 .stitch/
-
-# Node.js (Playwright verification)
-node_modules/
 
 # OS files
 Thumbs.db

@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     tags:
-      - "v*"        # 推送 v1.0.0 格式的 tag 时触发
+      - "v*" # 推送 v1.0.0 格式的 tag 时触发
   workflow_dispatch:
     inputs:
       version:
@@ -11,21 +11,29 @@ on:
         required: true
 
 permissions:
-  contents: write  # 需要创建 Release
+  contents: write # 需要创建 Release
 
 jobs:
   build:
-    name: Build
-    runs-on: windows-latest
+    name: Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest # x64 runner
+            arch: x64
+          - os: windows-11-arm # arm64 runner
+            arch: arm64
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: "3.13"
+          node-version: 20
 
       - name: Determine version
         id: version
@@ -36,131 +44,26 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-
-          if [[ "$VERSION" =~ (a|b|rc|dev)[0-9]+ ]]; then
-            PRERELEASE=true
-          else
-            PRERELEASE=false
-          fi
-
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Building version: $VERSION (${{ matrix.arch }})"
 
-          echo "Building version: $VERSION"
+      - name: Set version in package.json
+        shell: bash
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
 
       - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          # 使用 uv 读取 pyproject.toml 的 dependency-groups，避免 pip --group 版本兼容问题
-          pip install uv
-          uv sync --group dev
+        run: npm ci
 
-      - name: Update version in source
+      - name: Unit tests
+        run: npm test
+
+      - name: Rebuild native modules for Electron
+        run: npx electron-rebuild
+
+      - name: Build (electron-vite)
+        run: npm run build
+
+      - name: Package & publish (electron-builder)
+        run: npx electron-builder --win --${{ matrix.arch }} --publish always
         env:
-          MY_TYPELESS_VERSION: ${{ steps.version.outputs.version }}
-        run: python scripts/build.py --no-build
-
-      - name: Build with PyInstaller
-        run: |
-          uv run pyinstaller my_typeless.spec --clean --noconfirm
-
-      - name: Verify output
-        run: |
-          $exe = "dist/MyTypeless.exe"
-          if (Test-Path $exe) {
-            $size = (Get-Item $exe).Length / 1MB
-            Write-Host "Build successful! Size: $([math]::Round($size, 2)) MB"
-          } else {
-            Write-Error "Build failed: $exe not found"
-            exit 1
-          }
-
-      - name: Build installer with Inno Setup
-        run: |
-          iscc /DAPP_VERSION=${{ steps.version.outputs.version }} installer.iss
-
-      - name: Verify installer
-        run: |
-          $setup = "dist/MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe"
-          if (Test-Path $setup) {
-            $size = (Get-Item $setup).Length / 1MB
-            Write-Host "Installer built! Size: $([math]::Round($size, 2)) MB"
-          } else {
-            Write-Error "Installer build failed: $setup not found"
-            exit 1
-          }
-
-      - name: Generate SHA256 checksums
-        shell: pwsh
-        run: |
-          cd dist
-          $exe = "MyTypeless.exe"
-          $setup = "MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe"
-          Get-FileHash $exe, $setup -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } |
-            Out-File -Encoding ascii SHA256SUMS.txt
-          Write-Host "Checksums:"
-          Get-Content SHA256SUMS.txt
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: MyTypeless-${{ steps.version.outputs.version }}
-          path: |
-            dist/MyTypeless.exe
-            dist/MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe
-            dist/SHA256SUMS.txt
-          retention-days: 30
-
-  release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-
-    steps:
-      - name: Determine version
-        id: version
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
-
-          if [[ "$VERSION" =~ (a|b|rc|dev)[0-9]+ ]]; then
-            PRERELEASE=true
-          else
-            PRERELEASE=false
-          fi
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-          pattern: MyTypeless-${{ steps.version.outputs.version }}
-          merge-multiple: true
-
-      - name: List artifacts
-        run: find artifacts -maxdepth 2 -type f -print
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "My Typeless ${{ steps.version.outputs.tag }}"
-          draft: false
-          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
-          generate_release_notes: true
-          files: |
-            artifacts/MyTypeless.exe
-            artifacts/MyTypeless-Setup-v${{ steps.version.outputs.version }}.exe
-            artifacts/SHA256SUMS.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

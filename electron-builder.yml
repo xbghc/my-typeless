@@ -1,0 +1,49 @@
+appId: com.xbghc.mytypeless
+productName: My Typeless
+copyright: Copyright © xbghc
+
+directories:
+  output: release
+  buildResources: resources
+
+# 原生模块已预先针对 Electron ABI 准备（本地 prebuild-install / CI electron-rebuild）；
+# 关闭 electron-builder 自动 rebuild，避免本地 ARM64 无 MSVC 时编译失败。
+npmRebuild: false
+
+files:
+  - out/**
+
+# 模型、ort wasm、图标随包分发（main 运行时从 process.resourcesPath 读取）。
+extraResources:
+  - from: resources/silero_vad.onnx
+    to: silero_vad.onnx
+  - from: resources/ort-wasm
+    to: ort-wasm
+  - from: resources/icons
+    to: icons
+
+# 原生 .node 不能进 asar。
+asarUnpack:
+  - '**/*.node'
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+  icon: resources/icons/app.ico
+  # 保留 MyTypeless-Setup 前缀（旧 Python 版 updater 也以此识别第一个 Electron 包）。
+  artifactName: MyTypeless-Setup-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: MyTypeless-Setup-${version}-${arch}.${ext}
+  include: build/installer.nsh
+
+publish:
+  provider: github
+  owner: xbghc
+  repo: my-typeless

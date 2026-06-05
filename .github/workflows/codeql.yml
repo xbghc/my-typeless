@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [python, javascript-typescript]
+        language: [javascript-typescript]
 
     steps:
       - uses: actions/checkout@v6

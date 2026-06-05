@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
@@ -9,7 +9,7 @@ updates:
       sdk-clients:
         patterns:
           - "openai"
-          - "anthropic"
+          - "@anthropic-ai/sdk"
 
   - package-ecosystem: github-actions
     directory: /
