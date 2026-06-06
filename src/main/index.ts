@@ -12,6 +12,7 @@ import { CandidateStore } from './candidates'
 import { registerIpc } from './ipc'
 import { HotkeyListener } from './hotkey'
 import { Worker } from './worker'
+import { RecordingCoordinator } from './recordingCoordinator'
 import { injectText } from './textInjector'
 import { resourcePath } from './resources'
 import { cleanupLegacyAutostart, setAutostart } from './autostart'
@@ -29,16 +30,7 @@ let hotkey: HotkeyListener | null = null
 let updater: Updater | null = null
 let db: DB | null = null
 let quitting = false
-// 录音兜底看门狗 + 重入忽略标志（见热键 onPressed/onReleased）。
-let recordWatchdog: ReturnType<typeof setTimeout> | null = null
-let pressIgnored = false
-
-function clearRecordWatchdog(): void {
-  if (recordWatchdog) {
-    clearTimeout(recordWatchdog)
-    recordWatchdog = null
-  }
-}
+let coordinator: RecordingCoordinator | null = null
 
 // 生产构建默认非 dev（不覆盖用户 prompt、启用更新检查）；开发运行默认 dev。
 if (app.isPackaged && process.env.MY_TYPELESS_DEV === undefined) {
@@ -109,7 +101,7 @@ function sendToSettings(channel: string, payload?: unknown): void {
 
 function quit(): void {
   quitting = true
-  clearRecordWatchdog()
+  coordinator?.dispose()
   hotkey?.stop()
   updater?.stop()
   tray?.stop()
@@ -146,35 +138,21 @@ if (ensureSingleInstance(() => openSettings())) {
       },
     })
 
+    coordinator = new RecordingCoordinator({
+      worker,
+      startAudio: () => audioWin?.webContents.send(IPC.AUDIO_START),
+      stopAudio: () => audioWin?.webContents.send(IPC.AUDIO_STOP),
+      reloadAudio: () => {
+        if (audioWin && !audioWin.isDestroyed()) audioWin.reload()
+      },
+      notify: (message) => tray?.showNotification('My Typeless', message),
+      showError: (message, critical) => tray?.showError(message, critical),
+      log: { warn: (m) => log.warn(m), error: (m) => log.error(m) },
+    })
+
     hotkey = new HotkeyListener(currentConfig.hotkey)
-    hotkey.onPressed = () => {
-      // 上一段仍在处理时忽略新触发，避免注入串位、状态被旧流程覆盖。
-      if (worker.isRunning()) {
-        pressIgnored = true
-        tray?.showNotification('My Typeless', '正在处理上一段，请稍候…')
-        return
-      }
-      pressIgnored = false
-      worker.startRecording()
-      audioWin?.webContents.send(IPC.AUDIO_START)
-    }
-    hotkey.onReleased = () => {
-      if (pressIgnored) {
-        pressIgnored = false
-        return
-      }
-      worker.stopRecording()
-      audioWin?.webContents.send(IPC.AUDIO_STOP)
-      // 兜底：音频窗口若未发回 AUDIO_END（崩溃 / getUserMedia 失败），5s 后强制收尾，避免卡在 processing。
-      clearRecordWatchdog()
-      if (worker.isRunning()) {
-        recordWatchdog = setTimeout(() => {
-          recordWatchdog = null
-          log.warn('AUDIO_END 超时未达，强制结束分段流')
-          worker.finishSegments()
-        }, 5000)
-      }
-    }
+    hotkey.onPressed = () => coordinator?.onPressed()
+    hotkey.onReleased = () => coordinator?.onReleased()
     hotkey.onCaptured = (key) => sendToSettings(IPC.HOTKEY_CAPTURED, key)
     hotkey.start()
 
@@ -209,30 +187,16 @@ if (ensureSingleInstance(() => openSettings())) {
       return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
     })
     ipcMain.on(IPC.AUDIO_SEGMENT, (_e, wav: ArrayBuffer) => worker.pushSegment(Buffer.from(wav)))
-    ipcMain.on(IPC.AUDIO_END, () => {
-      clearRecordWatchdog()
-      worker.finishSegments()
-    })
-    ipcMain.on(IPC.AUDIO_ERROR, (_e, message: string) => {
-      log.error('Audio error: %s', message)
-      // 录音期间的音频失败（如麦克风不可用）：收尾流水线并提示，避免卡在 processing。
-      if (worker.isRunning()) {
-        clearRecordWatchdog()
-        worker.finishSegments()
-        tray?.showError('麦克风不可用或录音失败，请检查麦克风权限与设备。', true)
-      }
-    })
+    ipcMain.on(IPC.AUDIO_END, () => coordinator?.onAudioEnd())
+    ipcMain.on(IPC.AUDIO_ERROR, (_e, message: string) => coordinator?.onAudioError(message))
 
     settingsWin = createSettingsWindow()
     audioWin = createAudioWindow()
 
     // 音频 worker 渲染进程崩溃：收尾当前录音并重载隐藏窗口（重载会重新预加载 VAD）。
-    audioWin.webContents.on('render-process-gone', (_e, details) => {
-      log.error('Audio worker 渲染进程退出(%s)，重载隐藏窗口', details.reason)
-      clearRecordWatchdog()
-      if (worker.isRunning()) worker.finishSegments()
-      if (audioWin && !audioWin.isDestroyed()) audioWin.reload()
-    })
+    audioWin.webContents.on('render-process-gone', (_e, details) =>
+      coordinator?.onAudioWorkerGone(details.reason),
+    )
 
     tray = new TrayManager()
     tray.onOpen = openSettings
