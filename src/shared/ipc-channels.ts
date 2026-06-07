@@ -24,12 +24,18 @@ export const IPC = {
   AUDIO_SEGMENT: 'audio:segment',
   AUDIO_END: 'audio:end',
   AUDIO_ERROR: 'audio:error',
+  AUDIO_LEVEL: 'audio:level', // 录音音量电平上行 B → main（节流后转发给 overlay）
 
-  // 事件下行 main → A
+  // 事件下行 main → A（设置窗口）
   STATE_CHANGED: 'state:changed',
   ERROR_OCCURRED: 'error:occurred',
   HOTKEY_CAPTURED: 'hotkey:captured',
   RESULT_READY: 'result:ready',
+
+  // 事件下行 main → overlay（反馈浮窗）
+  OVERLAY_STATE: 'overlay:state',
+  OVERLAY_LEVEL: 'overlay:level',
+  OVERLAY_THEME: 'overlay:theme',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

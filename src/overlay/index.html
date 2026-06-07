@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>My Typeless Overlay</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="capsule" class="capsule" data-state="idle">
+      <span class="icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+          <line x1="12" x2="12" y1="18" y2="22" />
+        </svg>
+      </span>
+      <span class="wave" aria-hidden="true"></span>
+      <span class="spinner" aria-hidden="true"></span>
+      <span class="label"></span>
+    </div>
+    <script type="module" src="./overlay.ts"></script>
+  </body>
+</html>

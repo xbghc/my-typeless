@@ -2,6 +2,7 @@
 // 对应旧版 recorder.py + vad.py。
 import * as ort from 'onnxruntime-web/wasm'
 import workletUrl from './resampler.worklet.js?url'
+import { computeRms } from './level'
 
 ort.env.wasm.numThreads = 1
 
@@ -49,6 +50,11 @@ let segmentFrames: Int16Array[] = []
 let inSpeech = false
 let silenceCount = 0
 
+// 音量电平节流：worklet ~31fps，每 LEVEL_EVERY 帧推一次（~16Hz），取窗口内最大 RMS，供 overlay 波形。
+const LEVEL_EVERY = 2
+let levelCounter = 0
+let levelPeak = 0
+
 let stream: MediaStream | null = null
 let audioCtx: AudioContext | null = null
 let sourceNode: MediaStreamAudioSourceNode | null = null
@@ -60,6 +66,14 @@ let frameChain: Promise<void> = Promise.resolve()
 async function onFrame(frame: Int16Array): Promise<void> {
   if (!recording || !session) return
   segmentFrames.push(frame)
+  // 音量电平节流推送，供 overlay 波形（main 端按录音态门控转发）。
+  const rms = computeRms(frame)
+  if (rms > levelPeak) levelPeak = rms
+  if (++levelCounter >= LEVEL_EVERY) {
+    window.audioApi.sendLevel(levelPeak)
+    levelCounter = 0
+    levelPeak = 0
+  }
   const prob = await vadProbability(frame)
   if (prob >= SPEECH_THRESHOLD) {
     inSpeech = true
@@ -87,6 +101,8 @@ async function start(): Promise<void> {
     segmentFrames = []
     inSpeech = false
     silenceCount = 0
+    levelCounter = 0
+    levelPeak = 0
     frameChain = Promise.resolve()
     stream = await navigator.mediaDevices.getUserMedia({
       audio: {

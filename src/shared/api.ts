@@ -5,6 +5,7 @@ import type {
   Candidate,
   ErrorPayload,
   HistoryPage,
+  OverlayTheme,
   PlaygroundResult,
   ProviderTestPayload,
   SaveResult,
@@ -47,4 +48,13 @@ export interface AudioApi {
   sendSegment(wav: ArrayBuffer): void
   sendEnd(): void
   sendError(message: string): void
+  // 录音音量电平（0..1），节流后上行给 main 转发到 overlay 做波形。
+  sendLevel(level: number): void
+}
+
+// 反馈浮窗（src/overlay）使用的 API（window.overlayApi）。纯下行：状态 / 电平 / 主题。
+export interface OverlayApi {
+  onState(cb: (state: AppState) => void): () => void
+  onLevel(cb: (level: number) => void): () => void
+  onTheme(cb: (theme: OverlayTheme) => void): () => void
 }

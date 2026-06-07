@@ -152,6 +152,22 @@ describe('config load/migrate', () => {
     const cfg = loadConfig(file, false)
     expect(cfg.glossary).toEqual([])
   })
+
+  it('overlay defaults and bad data fall back to enabled + auto', () => {
+    writeFileSync(file, JSON.stringify({}))
+    expect(loadConfig(file, false).overlay).toEqual({ enabled: true, theme: 'auto' })
+
+    writeFileSync(file, JSON.stringify({ overlay: 'hello' }))
+    expect(loadConfig(file, false).overlay).toEqual({ enabled: true, theme: 'auto' })
+
+    writeFileSync(file, JSON.stringify({ overlay: { theme: 'bogus', enabled: 0 } }))
+    expect(loadConfig(file, false).overlay).toEqual({ enabled: true, theme: 'auto' })
+  })
+
+  it('overlay enabled=false and theme=dark round-trip', () => {
+    writeFileSync(file, JSON.stringify({ overlay: { enabled: false, theme: 'dark' } }))
+    expect(loadConfig(file, false).overlay).toEqual({ enabled: false, theme: 'dark' })
+  })
 })
 
 describe('prompt builders', () => {

@@ -1,0 +1,149 @@
+/* 反馈浮窗样式：底部居中胶囊，明暗跟随系统（prefers-color-scheme），data-theme 可强制覆盖。
+   动画一律走 transform/opacity（GPU 友好），绝不靠改窗口尺寸做动画。 */
+
+/* 默认（auto）= 深色；prefers-color-scheme:light 时切浅色。 */
+:root {
+  --bg: rgba(24, 24, 27, 0.92);
+  --fg: #f4f4f5;
+  --muted: #a1a1aa;
+  --accent: #ef4444;
+  --wave: #e4e4e7;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: rgba(255, 255, 255, 0.95);
+    --fg: #18181b;
+    --muted: #71717a;
+    --accent: #ef4444;
+    --wave: #3f3f46;
+    --shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  }
+}
+
+/* 强制主题（设置里选了亮/暗）：data-theme 覆盖系统。 */
+.capsule[data-theme='dark'] {
+  --bg: rgba(24, 24, 27, 0.92);
+  --fg: #f4f4f5;
+  --muted: #a1a1aa;
+  --accent: #ef4444;
+  --wave: #e4e4e7;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+.capsule[data-theme='light'] {
+  --bg: rgba(255, 255, 255, 0.95);
+  --fg: #18181b;
+  --muted: #71717a;
+  --accent: #ef4444;
+  --wave: #3f3f46;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 10px; /* 底部留出阴影 + 上滑动画空间 */
+  box-sizing: border-box;
+}
+
+.capsule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+  font: 500 13px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  white-space: nowrap;
+  /* 进/出场：淡入淡出 + 轻微上滑 */
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.capsule[data-state='recording'],
+.capsule[data-state='processing'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.icon svg {
+  width: 100%;
+  height: 100%;
+}
+.capsule[data-state='processing'] .icon {
+  display: none;
+}
+
+/* 波形：一排竖条，仅录音态显示，高度由 RMS 电平驱动（scaleY）。 */
+.wave {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+}
+.capsule[data-state='recording'] .wave {
+  display: flex;
+}
+.wave .bar {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--wave);
+  transform: scaleY(0.08);
+  transform-origin: center;
+  transition: transform 0.08s linear;
+}
+
+/* spinner：仅处理态显示。 */
+.spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--muted);
+  border-top-color: var(--fg);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.capsule[data-state='processing'] .spinner {
+  display: inline-block;
+}
+
+.label {
+  color: var(--muted);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 尊重系统“减少动态效果”。 */
+@media (prefers-reduced-motion: reduce) {
+  .capsule,
+  .wave .bar {
+    transition: none;
+  }
+  .spinner {
+    animation: none;
+  }
+}

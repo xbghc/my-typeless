@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AppConfig, ProviderConfig } from '@shared/types'
+import type { AppConfig, OverlayTheme, ProviderConfig } from '@shared/types'
 import {
   findProvider,
   normalizeProviders,
@@ -23,6 +23,8 @@ interface SettingsStore {
   hotkey: string
   capturing: boolean
   startWithWindows: boolean
+  overlayEnabled: boolean
+  overlayTheme: OverlayTheme
   language: string
 
   sttProviders: ProviderConfig[]
@@ -45,6 +47,8 @@ interface SettingsStore {
   setHotkey: (h: string) => void
   setCapturing: (c: boolean) => void
   setStartWithWindows: (v: boolean) => void
+  setOverlayEnabled: (v: boolean) => void
+  setOverlayTheme: (t: OverlayTheme) => void
 
   setSttActiveProvider: (id: string) => void
   setSttActiveModel: (m: string) => void
@@ -74,6 +78,8 @@ export const useStore = create<SettingsStore>((set, get) => ({
   hotkey: 'right alt',
   capturing: false,
   startWithWindows: false,
+  overlayEnabled: true,
+  overlayTheme: 'auto',
   language: '',
   sttProviders: [],
   activeSttProviderId: '',
@@ -101,6 +107,8 @@ export const useStore = create<SettingsStore>((set, get) => ({
       version,
       hotkey: config.hotkey || 'right alt',
       startWithWindows: !!config.start_with_windows,
+      overlayEnabled: config.overlay?.enabled ?? true,
+      overlayTheme: config.overlay?.theme ?? 'auto',
       language: config.stt?.language || '',
       sttProviders,
       activeSttProviderId,
@@ -119,6 +127,8 @@ export const useStore = create<SettingsStore>((set, get) => ({
   setHotkey: (hotkey) => set({ hotkey }),
   setCapturing: (capturing) => set({ capturing }),
   setStartWithWindows: (startWithWindows) => set({ startWithWindows }),
+  setOverlayEnabled: (overlayEnabled) => set({ overlayEnabled }),
+  setOverlayTheme: (overlayTheme) => set({ overlayTheme }),
 
   setSttActiveProvider: (id) => {
     const provider = findProvider(get().sttProviders, id)
@@ -204,6 +214,7 @@ export const useStore = create<SettingsStore>((set, get) => ({
     return {
       hotkey: s.hotkey,
       start_with_windows: s.startWithWindows,
+      overlay: { enabled: s.overlayEnabled, theme: s.overlayTheme },
       stt: {
         providers: sttProviders,
         active_provider_id: activeSttProviderId,

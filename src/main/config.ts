@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { CONFIG_FILE } from './paths'
 import { DEFAULT_LLM_PROMPT } from '@shared/prompts'
-import type { AppConfig, LLMConfig, ProviderConfig, STTConfig } from '@shared/types'
+import type { AppConfig, LLMConfig, OverlayConfig, ProviderConfig, STTConfig } from '@shared/types'
 
 export { DEFAULT_LLM_PROMPT }
 
@@ -49,6 +49,10 @@ export function defaultLlmConfig(): LLMConfig {
   }
 }
 
+export function defaultOverlayConfig(): OverlayConfig {
+  return { enabled: true, theme: 'auto' }
+}
+
 export function defaultConfig(): AppConfig {
   return {
     hotkey: 'right alt',
@@ -56,6 +60,7 @@ export function defaultConfig(): AppConfig {
     stt: defaultSttConfig(),
     llm: defaultLlmConfig(),
     glossary: [],
+    overlay: defaultOverlayConfig(),
   }
 }
 
@@ -65,6 +70,13 @@ export function activeProvider(
   return (
     cfg.providers.find((p) => p.id === cfg.active_provider_id) ?? cfg.providers[0] ?? null
   )
+}
+
+/** 解析 api_key 中的 ${ENV_VAR} 占位为环境变量值；普通字符串原样返回。
+ *  让用户可在配置里写 ${MINIMAX_API_KEY}，密钥不落明文进 config.json。 */
+export function resolveSecret(value: string): string {
+  const m = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/.exec(value.trim())
+  return m ? (process.env[m[1]] ?? '') : value
 }
 
 interface RawObj {
@@ -146,12 +158,22 @@ export function migrateConfig(data: RawObj, devMode: boolean): AppConfig {
 
   const glossary = Array.isArray(data.glossary) ? (data.glossary as unknown[]).map(String) : []
 
+  // overlay：缺省启用、主题 auto（跟随系统）；旧配置无此字段时平滑回退。
+  const overlayData = (data.overlay ?? {}) as RawObj
+  const overlay: OverlayConfig = {
+    // 只认真布尔；缺省与任意非布尔（含 0/""/"false" 等脏数据）一律回退“启用”，保持向后兼容。
+    enabled: typeof overlayData.enabled === 'boolean' ? overlayData.enabled : true,
+    theme:
+      overlayData.theme === 'light' ? 'light' : overlayData.theme === 'dark' ? 'dark' : 'auto',
+  }
+
   const config: AppConfig = {
     hotkey: typeof data.hotkey === 'string' ? data.hotkey : 'right alt',
     start_with_windows: data.start_with_windows === true,
     stt,
     llm,
     glossary,
+    overlay,
   }
 
   // 开发模式下强制使用代码中的最新提示词。

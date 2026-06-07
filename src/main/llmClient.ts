@@ -2,7 +2,17 @@
 import OpenAI from 'openai'
 import Anthropic from '@anthropic-ai/sdk'
 import type { LLMConfig } from '@shared/types'
-import { activeProvider } from './config'
+import { activeProvider, resolveSecret } from './config'
+
+// 剥离推理模型内联的思维链 <think>…</think>（如 MiniMax-M2/M3），只保留最终书面文本。
+const RE_THINK = /<think>[\s\S]*?<\/think>/gi
+export function stripReasoning(text: string): string {
+  return text
+    .replace(RE_THINK, '') // 成对 <think>…</think>
+    .replace(/<think>[\s\S]*$/i, '') // 被 max_tokens 截断的未闭合 <think>：删到结尾，别把思维链当结果注入
+    .replace(/<\/think>/gi, '') // 残留的孤立 </think>（罕见嵌套）
+    .trim()
+}
 
 export class LLMClient {
   private providerType: 'openai' | 'anthropic'
@@ -16,7 +26,7 @@ export class LLMClient {
     this.model = config.active_model
     this.basePrompt = config.prompt
     const baseURL = p?.base_url ?? ''
-    const apiKey = p?.api_key ?? ''
+    const apiKey = resolveSecret(p?.api_key ?? '')
     if (this.providerType === 'anthropic') {
       this.client = new Anthropic({ apiKey, baseURL: baseURL || undefined })
     } else {
@@ -39,7 +49,8 @@ export class LLMClient {
         max_tokens: 4096,
       })
       const first = res.content[0]
-      return (first && first.type === 'text' ? first.text : null) || rawText
+      // 先 strip 再回退：think-only 响应 strip 后为空时回退到原始转写，绝不注入空串丢字。
+      return stripReasoning(first && first.type === 'text' ? first.text : '') || rawText
     }
 
     const client = this.client as OpenAI
@@ -50,6 +61,6 @@ export class LLMClient {
         { role: 'user', content: userMessage },
       ],
     })
-    return res.choices[0]?.message?.content || rawText
+    return stripReasoning(res.choices[0]?.message?.content ?? '') || rawText
   }
 }

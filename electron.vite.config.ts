@@ -2,9 +2,9 @@ import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
-// 两个 renderer：设置窗口(src/renderer，React) 和隐藏音频 worker(src/audio，纯 TS)。
-// renderer.root 设为 src，使两个 HTML 入口共享同一构建根；
-// 产物落在 out/renderer/renderer/index.html 与 out/renderer/audio/index.html。
+// 三个 renderer：设置窗口(src/renderer，React)、隐藏音频 worker(src/audio)、反馈浮窗(src/overlay)，后两者纯 TS。
+// renderer.root 设为 src，使各 HTML 入口共享同一构建根；
+// 产物落在 out/renderer/{renderer,audio,overlay}/index.html。
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
@@ -35,6 +35,7 @@ export default defineConfig({
         input: {
           settings: resolve(__dirname, 'src/renderer/index.html'),
           audio: resolve(__dirname, 'src/audio/index.html'),
+          overlay: resolve(__dirname, 'src/overlay/index.html'),
         },
       },
     },

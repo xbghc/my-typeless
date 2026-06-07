@@ -27,12 +27,21 @@ export interface LLMConfig {
   prompt: string
 }
 
+// 反馈浮窗主题：auto = 跟随系统明暗（prefers-color-scheme），可在设置中强制亮/暗。
+export type OverlayTheme = 'auto' | 'light' | 'dark'
+
+export interface OverlayConfig {
+  enabled: boolean
+  theme: OverlayTheme
+}
+
 export interface AppConfig {
   hotkey: string
   start_with_windows: boolean
   stt: STTConfig
   llm: LLMConfig
   glossary: string[]
+  overlay: OverlayConfig
 }
 
 export interface HistoryEntry {
